@@ -1,2 +1,6 @@
 /target
 .direnv
+.idea
+# Third-party source codes
+**/source_codes
+**/git_ignores
