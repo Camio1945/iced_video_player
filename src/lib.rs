@@ -10,7 +10,12 @@
 //! use iced_video_player::{Video, VideoPlayer};
 //!
 //! fn main() -> iced::Result {
-//!     iced::run("Video Player", (), App::view)
+//!     iced::run(App::update, App::view)
+//! }
+//!
+//! #[derive(Clone, Debug)]
+//! enum Message {
+//!     NewFrame,
 //! }
 //!
 //! struct App {
@@ -26,8 +31,13 @@
 //! }
 //!
 //! impl App {
-//!     fn view(&self) -> iced::Element<()> {
-//!         VideoPlayer::new(&self.video).into()
+//!     fn update(&mut self, _message: Message) {
+//!     }
+//!
+//!     fn view(&self) -> iced::Element<Message> {
+//!         VideoPlayer::new(&self.video)
+//!             .on_new_frame(Message::NewFrame)
+//!             .into()
 //!     }
 //! }
 //! ```
