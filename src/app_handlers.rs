@@ -173,15 +173,32 @@ impl App {
     }
 
     pub fn handle_open_file(&mut self) -> Task<Message> {
-        let path = rfd::FileDialog::new()
-            .add_filter(
-                "Video Files",
-                &[
-                    "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v", "mpg", "mpeg", "ogv",
-                ],
-            )
-            .add_filter("All Files", &["*"])
-            .pick_file();
+        // Use AsyncFileDialog so the dialog runs on a dedicated thread with
+        // proper COM apartment initialization. Calling the synchronous
+        // rfd::FileDialog::pick_file() on the Iced UI thread blocks the event
+        // loop and prevents the Windows shell from receiving COM messages,
+        // which causes the file list to take a very long time to load
+        // ("Working on it...").
+        Task::perform(
+            async move {
+                rfd::AsyncFileDialog::new()
+                    .add_filter(
+                        "Video Files",
+                        &[
+                            "mp4", "mkv", "avi", "mov", "webm", "wmv", "flv", "m4v", "mpg", "mpeg",
+                            "ogv",
+                        ],
+                    )
+                    .add_filter("All Files", &["*"])
+                    .pick_file()
+                    .await
+                    .map(|handle| handle.path().to_path_buf())
+            },
+            Message::FilePicked,
+        )
+    }
+
+    pub fn handle_file_picked(&mut self, path: Option<std::path::PathBuf>) -> Task<Message> {
         if let Some(path) = path {
             let ps = path.display().to_string();
             self.video = VideoState::Loading(ps.clone());
@@ -238,13 +255,26 @@ impl App {
     }
 
     pub fn handle_load_subtitle(&mut self) -> Task<Message> {
-        let path = rfd::FileDialog::new()
-            .add_filter(
-                "Subtitle Files",
-                &["srt", "ass", "ssa", "vtt", "sub", "smi"],
-            )
-            .add_filter("All Files", &["*"])
-            .pick_file();
+        // Use AsyncFileDialog for the same reason as handle_open_file: the
+        // synchronous dialog blocks the UI thread and causes the Windows
+        // shell file enumeration to stall.
+        Task::perform(
+            async move {
+                rfd::AsyncFileDialog::new()
+                    .add_filter(
+                        "Subtitle Files",
+                        &["srt", "ass", "ssa", "vtt", "sub", "smi"],
+                    )
+                    .add_filter("All Files", &["*"])
+                    .pick_file()
+                    .await
+                    .map(|handle| handle.path().to_path_buf())
+            },
+            Message::SubtitlePicked,
+        )
+    }
+
+    pub fn handle_subtitle_picked(&mut self, path: Option<std::path::PathBuf>) -> Task<Message> {
         if let Some(path) = path {
             let url = url::Url::from_file_path(&path).unwrap();
             if let Some(Err(e)) = self.with_video_mut(|v| v.set_subtitle_url(&url)) {

@@ -37,8 +37,10 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
             Task::none()
         }
         Message::OpenFile => app.handle_open_file(),
+        Message::FilePicked(p) => app.handle_file_picked(p),
         Message::FileOpened(r) => app.handle_file_opened(r),
         Message::LoadSubtitle => app.handle_load_subtitle(),
+        Message::SubtitlePicked(p) => app.handle_subtitle_picked(p),
         Message::SubtitleText(t) => app.handle_subtitle_text(t),
         Message::SearchWord(w) => app.handle_search_word(w),
         Message::DictionaryResult(r) => app.handle_dictionary_result(r),
