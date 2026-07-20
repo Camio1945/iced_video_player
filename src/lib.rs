@@ -45,6 +45,8 @@
 //! You can programmatically control the video (e.g., seek, pause, loop, grab thumbnails) by accessing various methods on [`Video`].
 
 mod pipeline;
+mod pipeline_helpers;
+mod primitive;
 mod video;
 mod video_player;
 

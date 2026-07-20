@@ -226,6 +226,16 @@ impl Drop for Video {
     }
 }
 
+type SharedFrameState = (
+    Arc<AtomicBool>,
+    std::thread::JoinHandle<()>,
+    Arc<Mutex<Frame>>,
+    Arc<AtomicBool>,
+    Arc<Mutex<Instant>>,
+    Arc<Mutex<Option<String>>>,
+    Arc<AtomicBool>,
+);
+
 impl Video {
     /// Create a new video player from a given video which loads from `uri`.
     /// Note that live sources will report the duration to be zero.
@@ -274,8 +284,35 @@ impl Video {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
         let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
 
-        // We need to ensure we stop the pipeline if we hit an error,
-        // or else there may be audio left playing in the background.
+        let pad = video_sink.pads().first().cloned().unwrap();
+        let (width, height, framerate, duration, sync_av) =
+            Self::extract_pipeline_properties(&pipeline, &pad)?;
+
+        let (alive, worker, frame, upload_frame, last_frame_time, subtitle_text, upload_text) =
+            Self::setup_state_and_worker(video_sink, text_sink, &pipeline);
+
+        Ok(Self::make_video_internal(
+            id,
+            pipeline,
+            alive,
+            worker,
+            width,
+            height,
+            framerate,
+            duration,
+            sync_av,
+            frame,
+            upload_frame,
+            last_frame_time,
+            subtitle_text,
+            upload_text,
+        ))
+    }
+
+    fn extract_pipeline_properties(
+        pipeline: &gst::Pipeline,
+        pad: &gst::Pad,
+    ) -> Result<(i32, i32, f64, Duration, bool), Error> {
         macro_rules! cleanup {
             ($expr:expr) => {
                 $expr.map_err(|e| {
@@ -285,30 +322,15 @@ impl Video {
             };
         }
 
-        let pad = video_sink.pads().first().cloned().unwrap();
-
         cleanup!(pipeline.set_state(gst::State::Playing))?;
-
-        // wait for up to 5 seconds until the decoder gets the source capabilities
         cleanup!(pipeline.state(gst::ClockTime::from_seconds(5)).0)?;
 
-        // extract resolution and framerate
-        // TODO(jazzfool): maybe we want to extract some other information too?
         let caps = cleanup!(pad.current_caps().ok_or(Error::Caps))?;
         let s = cleanup!(caps.structure(0).ok_or(Error::Caps))?;
         let width = cleanup!(s.get::<i32>("width").map_err(|_| Error::Caps))?;
         let height = cleanup!(s.get::<i32>("height").map_err(|_| Error::Caps))?;
         let framerate = cleanup!(s.get::<gst::Fraction>("framerate").map_err(|_| Error::Caps))?;
-        let framerate = framerate.numer() as f64 / framerate.denom() as f64;
-
-        if framerate.is_nan()
-            || framerate.is_infinite()
-            || framerate < 0.0
-            || framerate.abs() < f64::EPSILON
-        {
-            let _ = pipeline.set_state(gst::State::Null);
-            return Err(Error::Framerate(framerate));
-        }
+        let framerate = Self::validate_framerate(framerate, pipeline)?;
 
         let duration = Duration::from_nanos(
             pipeline
@@ -316,10 +338,203 @@ impl Video {
                 .map(|duration| duration.nseconds())
                 .unwrap_or(0),
         );
-
         let sync_av = pipeline.has_property("av-offset", None);
 
-        // NV12 = 12bpp
+        Ok((width, height, framerate, duration, sync_av))
+    }
+
+    fn validate_framerate(
+        framerate: gst::Fraction,
+        pipeline: &gst::Pipeline,
+    ) -> Result<f64, Error> {
+        let f = framerate.numer() as f64 / framerate.denom() as f64;
+        if f.is_nan() || f.is_infinite() || f < 0.0 || f.abs() < f64::EPSILON {
+            let _ = pipeline.set_state(gst::State::Null);
+            return Err(Error::Framerate(f));
+        }
+        Ok(f)
+    }
+
+    fn setup_state_and_worker(
+        video_sink: gst_app::AppSink,
+        text_sink: Option<gst_app::AppSink>,
+        pipeline: &gst::Pipeline,
+    ) -> SharedFrameState {
+        let (
+            frame,
+            upload_frame,
+            alive,
+            last_frame_time,
+            frame_ref,
+            upload_frame_ref,
+            alive_ref,
+            last_frame_time_ref,
+        ) = Self::create_shared_video_state();
+        let (subtitle_text, upload_text, subtitle_text_ref, upload_text_ref) =
+            Self::create_shared_subtitle_state();
+        let worker = Self::spawn_frame_worker(
+            video_sink,
+            text_sink,
+            pipeline.clone(),
+            frame_ref,
+            upload_frame_ref,
+            alive_ref,
+            last_frame_time_ref,
+            subtitle_text_ref,
+            upload_text_ref,
+        );
+        (
+            alive,
+            worker,
+            frame,
+            upload_frame,
+            last_frame_time,
+            subtitle_text,
+            upload_text,
+        )
+    }
+
+    fn make_video_internal(
+        id: u64,
+        pipeline: gst::Pipeline,
+        alive: Arc<AtomicBool>,
+        worker: std::thread::JoinHandle<()>,
+        width: i32,
+        height: i32,
+        framerate: f64,
+        duration: Duration,
+        sync_av: bool,
+        frame: Arc<Mutex<Frame>>,
+        upload_frame: Arc<AtomicBool>,
+        last_frame_time: Arc<Mutex<Instant>>,
+        subtitle_text: Arc<Mutex<Option<String>>>,
+        upload_text: Arc<AtomicBool>,
+    ) -> Video {
+        Self::construct_video_from_internal(Self::build_internal_fields(
+            id,
+            pipeline,
+            alive,
+            worker,
+            width,
+            height,
+            framerate,
+            duration,
+            sync_av,
+            frame,
+            upload_frame,
+            last_frame_time,
+            subtitle_text,
+            upload_text,
+        ))
+    }
+
+    fn build_internal_fields(
+        id: u64,
+        pipeline: gst::Pipeline,
+        alive: Arc<AtomicBool>,
+        worker: std::thread::JoinHandle<()>,
+        width: i32,
+        height: i32,
+        framerate: f64,
+        duration: Duration,
+        sync_av: bool,
+        frame: Arc<Mutex<Frame>>,
+        upload_frame: Arc<AtomicBool>,
+        last_frame_time: Arc<Mutex<Instant>>,
+        subtitle_text: Arc<Mutex<Option<String>>>,
+        upload_text: Arc<AtomicBool>,
+    ) -> std::sync::RwLock<Internal> {
+        let bus = pipeline.bus().unwrap();
+        RwLock::new(Self::assemble_internal(
+            id,
+            bus,
+            pipeline,
+            alive,
+            worker,
+            width,
+            height,
+            framerate,
+            duration,
+            sync_av,
+            frame,
+            upload_frame,
+            last_frame_time,
+            subtitle_text,
+            upload_text,
+        ))
+    }
+
+    fn assemble_internal(
+        id: u64,
+        bus: gst::Bus,
+        pipeline: gst::Pipeline,
+        alive: Arc<AtomicBool>,
+        worker: std::thread::JoinHandle<()>,
+        width: i32,
+        height: i32,
+        framerate: f64,
+        duration: Duration,
+        sync_av: bool,
+        frame: Arc<Mutex<Frame>>,
+        upload_frame: Arc<AtomicBool>,
+        last_frame_time: Arc<Mutex<Instant>>,
+        subtitle_text: Arc<Mutex<Option<String>>>,
+        upload_text: Arc<AtomicBool>,
+    ) -> Internal {
+        Internal {
+            id,
+            bus,
+            source: pipeline,
+            alive,
+            worker: Some(worker),
+            width,
+            height,
+            framerate,
+            duration,
+            speed: 1.0,
+            sync_av,
+            frame,
+            upload_frame,
+            last_frame_time,
+            looping: false,
+            is_eos: false,
+            restart_stream: false,
+            sync_av_avg: 0,
+            sync_av_counter: 0,
+            subtitle_text,
+            upload_text,
+        }
+    }
+
+    fn construct_video_from_internal(rw: std::sync::RwLock<Internal>) -> Video {
+        Video(rw)
+    }
+
+    fn try_pull_video_sample(
+        video_sink: &gst_app::AppSink,
+        pipeline_ref: &gst::Pipeline,
+    ) -> Result<gst::Sample, gst::FlowError> {
+        if pipeline_ref.state(gst::ClockTime::ZERO).1 != gst::State::Playing {
+            video_sink
+                .try_pull_preroll(gst::ClockTime::from_mseconds(16))
+                .ok_or(gst::FlowError::Eos)
+        } else {
+            video_sink
+                .try_pull_sample(gst::ClockTime::from_mseconds(16))
+                .ok_or(gst::FlowError::Eos)
+        }
+    }
+
+    fn create_shared_video_state() -> (
+        Arc<Mutex<Frame>>,
+        Arc<AtomicBool>,
+        Arc<AtomicBool>,
+        Arc<Mutex<Instant>>,
+        Arc<Mutex<Frame>>,
+        Arc<AtomicBool>,
+        Arc<AtomicBool>,
+        Arc<Mutex<Instant>>,
+    ) {
         let frame = Arc::new(Mutex::new(Frame::empty()));
         let upload_frame = Arc::new(AtomicBool::new(false));
         let alive = Arc::new(AtomicBool::new(true));
@@ -330,108 +545,147 @@ impl Video {
         let alive_ref = Arc::clone(&alive);
         let last_frame_time_ref = Arc::clone(&last_frame_time);
 
+        (
+            frame,
+            upload_frame,
+            alive,
+            last_frame_time,
+            frame_ref,
+            upload_frame_ref,
+            alive_ref,
+            last_frame_time_ref,
+        )
+    }
+
+    fn create_shared_subtitle_state() -> (
+        Arc<Mutex<Option<String>>>,
+        Arc<AtomicBool>,
+        Arc<Mutex<Option<String>>>,
+        Arc<AtomicBool>,
+    ) {
         let subtitle_text = Arc::new(Mutex::new(None));
         let upload_text = Arc::new(AtomicBool::new(false));
         let subtitle_text_ref = Arc::clone(&subtitle_text);
         let upload_text_ref = Arc::clone(&upload_text);
-
-        let pipeline_ref = pipeline.clone();
-
-        let worker = std::thread::spawn(move || {
-            let mut clear_subtitles_at = None;
-
-            while alive_ref.load(Ordering::Acquire) {
-                if let Err(gst::FlowError::Error) = (|| -> Result<(), gst::FlowError> {
-                    let sample =
-                        if pipeline_ref.state(gst::ClockTime::ZERO).1 != gst::State::Playing {
-                            video_sink
-                                .try_pull_preroll(gst::ClockTime::from_mseconds(16))
-                                .ok_or(gst::FlowError::Eos)?
-                        } else {
-                            video_sink
-                                .try_pull_sample(gst::ClockTime::from_mseconds(16))
-                                .ok_or(gst::FlowError::Eos)?
-                        };
-
-                    *last_frame_time_ref
-                        .lock()
-                        .map_err(|_| gst::FlowError::Error)? = Instant::now();
-
-                    let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
-                    let frame_pts = buffer.pts().ok_or(gst::FlowError::Error)?;
-                    {
-                        let mut frame_guard =
-                            frame_ref.lock().map_err(|_| gst::FlowError::Error)?;
-                        *frame_guard = Frame(sample);
-                    }
-
-                    upload_frame_ref.swap(true, Ordering::SeqCst);
-
-                    if let Some(at) = clear_subtitles_at
-                        && frame_pts >= at
-                    {
-                        *subtitle_text_ref
-                            .lock()
-                            .map_err(|_| gst::FlowError::Error)? = None;
-                        upload_text_ref.store(true, Ordering::SeqCst);
-                        clear_subtitles_at = None;
-                    }
-
-                    let text = text_sink
-                        .as_ref()
-                        .and_then(|sink| sink.try_pull_sample(gst::ClockTime::from_seconds(0)));
-                    if let Some(text) = text {
-                        let text = text.buffer().ok_or(gst::FlowError::Error)?;
-                        let text_duration = text.duration().ok_or(gst::FlowError::Error)?;
-
-                        let map = text.map_readable().map_err(|_| gst::FlowError::Error)?;
-                        let text = std::str::from_utf8(map.as_slice())
-                            .map_err(|_| gst::FlowError::Error)?
-                            .to_string();
-                        *subtitle_text_ref
-                            .lock()
-                            .map_err(|_| gst::FlowError::Error)? = Some(text);
-                        upload_text_ref.store(true, Ordering::SeqCst);
-                        // should be text_pts + text_duration
-                        // but playbin can specify text-offset which does not update the text buffer pts
-                        // so we'll just take it as starting on this frame
-                        clear_subtitles_at = Some(frame_pts + text_duration);
-                    }
-
-                    Ok(())
-                })() {
-                    log::error!("error pulling frame");
-                }
-            }
-        });
-
-        Ok(Video(RwLock::new(Internal {
-            id,
-
-            bus: pipeline.bus().unwrap(),
-            source: pipeline,
-            alive,
-            worker: Some(worker),
-
-            width,
-            height,
-            framerate,
-            duration,
-            speed: 1.0,
-            sync_av,
-
-            frame,
-            upload_frame,
-            last_frame_time,
-            looping: false,
-            is_eos: false,
-            restart_stream: false,
-            sync_av_avg: 0,
-            sync_av_counter: 0,
-
+        (
             subtitle_text,
             upload_text,
-        })))
+            subtitle_text_ref,
+            upload_text_ref,
+        )
+    }
+
+    fn spawn_frame_worker(
+        video_sink: gst_app::AppSink,
+        text_sink: Option<gst_app::AppSink>,
+        pipeline_ref: gst::Pipeline,
+        frame_ref: Arc<Mutex<Frame>>,
+        upload_frame_ref: Arc<AtomicBool>,
+        alive_ref: Arc<AtomicBool>,
+        last_frame_time_ref: Arc<Mutex<Instant>>,
+        subtitle_text_ref: Arc<Mutex<Option<String>>>,
+        upload_text_ref: Arc<AtomicBool>,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::spawn(move || {
+            let mut clear_subtitles_at = None;
+            while alive_ref.load(Ordering::Acquire) {
+                if let Err(e) = Self::process_single_video_frame(
+                    &video_sink,
+                    text_sink.as_ref(),
+                    &pipeline_ref,
+                    &frame_ref,
+                    &upload_frame_ref,
+                    &last_frame_time_ref,
+                    &subtitle_text_ref,
+                    &upload_text_ref,
+                    &mut clear_subtitles_at,
+                ) {
+                    log::error!("error pulling frame: {e:?}");
+                }
+            }
+        })
+    }
+
+    fn process_single_video_frame(
+        video_sink: &gst_app::AppSink,
+        text_sink: Option<&gst_app::AppSink>,
+        pipeline_ref: &gst::Pipeline,
+        frame_ref: &Arc<Mutex<Frame>>,
+        upload_frame_ref: &Arc<AtomicBool>,
+        last_frame_time_ref: &Arc<Mutex<Instant>>,
+        subtitle_text_ref: &Arc<Mutex<Option<String>>>,
+        upload_text_ref: &Arc<AtomicBool>,
+        clear_subtitles_at: &mut Option<gst::ClockTime>,
+    ) -> Result<(), gst::FlowError> {
+        let sample = Self::try_pull_video_sample(video_sink, pipeline_ref)?;
+        *last_frame_time_ref
+            .lock()
+            .map_err(|_| gst::FlowError::Error)? = Instant::now();
+
+        let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
+        let frame_pts = buffer.pts().ok_or(gst::FlowError::Error)?;
+        {
+            let mut frame_guard = frame_ref.lock().map_err(|_| gst::FlowError::Error)?;
+            *frame_guard = Frame(sample);
+        }
+        upload_frame_ref.swap(true, Ordering::SeqCst);
+
+        Self::clear_expired_subtitles(
+            frame_pts,
+            clear_subtitles_at,
+            subtitle_text_ref,
+            upload_text_ref,
+        )?;
+        Self::pull_subtitle_sample(
+            text_sink,
+            subtitle_text_ref,
+            upload_text_ref,
+            frame_pts,
+            clear_subtitles_at,
+        )?;
+        Ok(())
+    }
+
+    fn clear_expired_subtitles(
+        frame_pts: gst::ClockTime,
+        clear_subtitles_at: &mut Option<gst::ClockTime>,
+        subtitle_text_ref: &Arc<Mutex<Option<String>>>,
+        upload_text_ref: &Arc<AtomicBool>,
+    ) -> Result<(), gst::FlowError> {
+        if let Some(at) = clear_subtitles_at
+            && frame_pts >= *at
+        {
+            *subtitle_text_ref
+                .lock()
+                .map_err(|_| gst::FlowError::Error)? = None;
+            upload_text_ref.store(true, Ordering::SeqCst);
+            *clear_subtitles_at = None;
+        }
+        Ok(())
+    }
+
+    fn pull_subtitle_sample(
+        text_sink: Option<&gst_app::AppSink>,
+        subtitle_text_ref: &Arc<Mutex<Option<String>>>,
+        upload_text_ref: &Arc<AtomicBool>,
+        frame_pts: gst::ClockTime,
+        clear_subtitles_at: &mut Option<gst::ClockTime>,
+    ) -> Result<(), gst::FlowError> {
+        let text = text_sink.and_then(|sink| sink.try_pull_sample(gst::ClockTime::from_seconds(0)));
+        if let Some(text) = text {
+            let text = text.buffer().ok_or(gst::FlowError::Error)?;
+            let text_duration = text.duration().ok_or(gst::FlowError::Error)?;
+            let map = text.map_readable().map_err(|_| gst::FlowError::Error)?;
+            let text = std::str::from_utf8(map.as_slice())
+                .map_err(|_| gst::FlowError::Error)?
+                .to_string();
+            *subtitle_text_ref
+                .lock()
+                .map_err(|_| gst::FlowError::Error)? = Some(text);
+            upload_text_ref.store(true, Ordering::SeqCst);
+            *clear_subtitles_at = Some(frame_pts + text_duration);
+        }
+        Ok(())
     }
 
     pub(crate) fn read(&self) -> impl Deref<Target = Internal> + '_ {
@@ -603,26 +857,9 @@ impl Video {
 
         let out = {
             let inner = self.read();
-            let width = inner.width;
-            let height = inner.height;
             positions
                 .into_iter()
-                .map(|pos| {
-                    inner.seek(pos, true)?;
-                    inner.upload_frame.store(false, Ordering::SeqCst);
-                    while !inner.upload_frame.load(Ordering::SeqCst) {
-                        std::hint::spin_loop();
-                    }
-                    let frame_guard = inner.frame.lock().map_err(|_| Error::Lock)?;
-                    let frame = frame_guard.readable().ok_or(Error::Lock)?;
-                    let stride = frame_guard.stride();
-
-                    Ok(img::Handle::from_rgba(
-                        inner.width as u32 / downscale,
-                        inner.height as u32 / downscale,
-                        yuv_to_rgba(frame.as_slice(), width as _, height as _, downscale, stride),
-                    ))
-                })
+                .map(|pos| Self::capture_thumbnail(&inner, pos, downscale))
                 .collect()
         };
 
@@ -632,6 +869,44 @@ impl Video {
 
         out
     }
+
+    fn capture_thumbnail(
+        inner: &Internal,
+        pos: Position,
+        downscale: u32,
+    ) -> Result<img::Handle, Error> {
+        inner.seek(pos, true)?;
+        inner.upload_frame.store(false, Ordering::SeqCst);
+        while !inner.upload_frame.load(Ordering::SeqCst) {
+            std::hint::spin_loop();
+        }
+        let frame_guard = inner.frame.lock().map_err(|_| Error::Lock)?;
+        let frame = frame_guard.readable().ok_or(Error::Lock)?;
+        let stride = frame_guard.stride();
+        Ok(img::Handle::from_rgba(
+            inner.width as u32 / downscale,
+            inner.height as u32 / downscale,
+            yuv_to_rgba(
+                frame.as_slice(),
+                inner.width as _,
+                inner.height as _,
+                downscale,
+                stride,
+            ),
+        ))
+    }
+}
+
+fn nv12_pixel_to_rgba(yuv: &[u8], y_offset: usize, uv_offset: usize) -> [u8; 4] {
+    let y = yuv[y_offset] as f32;
+    let u = yuv[uv_offset] as f32;
+    let v = yuv[uv_offset + 1] as f32;
+
+    let r = 1.164 * (y - 16.0) + 1.596 * (v - 128.0);
+    let g = 1.164 * (y - 16.0) - 0.813 * (v - 128.0) - 0.391 * (u - 128.0);
+    let b = 1.164 * (y - 16.0) + 2.018 * (u - 128.0);
+
+    [r as u8, g as u8, b as u8, 0xFF]
 }
 
 fn yuv_to_rgba(
@@ -641,36 +916,17 @@ fn yuv_to_rgba(
     downscale: u32,
     stride: Option<u32>,
 ) -> Vec<u8> {
-    // Use stride from VideoMeta if available, otherwise assume stride == width
     let stride = stride.unwrap_or(width);
-
     let uv_start = stride * height;
-    let mut rgba = vec![];
+    let mut rgba = Vec::with_capacity(((width / downscale) * (height / downscale) * 4) as usize);
 
     for y in 0..height / downscale {
         for x in 0..width / downscale {
             let x_src = x * downscale;
             let y_src = y * downscale;
-
-            // NV12 memory layout with stride:
-            // Y plane: stride bytes per row, starting at offset 0
-            // UV plane: stride bytes per row (same stride), starting at offset stride * height
-            // Each pixel is 1 byte Y, and every 2x2 block shares 2 bytes (U, V)
             let y_offset = (y_src * stride + x_src) as usize;
             let uv_offset = (uv_start + (y_src / 2) * stride + (x_src / 2) * 2) as usize;
-
-            let y = yuv[y_offset] as f32;
-            let u = yuv[uv_offset] as f32;
-            let v = yuv[uv_offset + 1] as f32;
-
-            let r = 1.164 * (y - 16.0) + 1.596 * (v - 128.0);
-            let g = 1.164 * (y - 16.0) - 0.813 * (v - 128.0) - 0.391 * (u - 128.0);
-            let b = 1.164 * (y - 16.0) + 2.018 * (u - 128.0);
-
-            rgba.push(r as u8);
-            rgba.push(g as u8);
-            rgba.push(b as u8);
-            rgba.push(0xFF);
+            rgba.extend_from_slice(&nv12_pixel_to_rgba(yuv, y_offset, uv_offset));
         }
     }
 

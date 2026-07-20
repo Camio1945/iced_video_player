@@ -1,0 +1,21 @@
+   Compiling glib-sys v0.20.10
+   Compiling webpki-roots v1.0.9
+   Compiling rustls-webpki v0.103.13
+   Compiling serde_json v1.0.149
+   Compiling serde v1.0.228
+   Compiling webpki-roots v0.26.11
+   Compiling gobject-sys v0.20.10
+   Compiling gstreamer-sys v0.23.6
+   Compiling gio-sys v0.20.10
+   Compiling rustls v0.23.42
+   Compiling gstreamer-base-sys v0.23.6
+   Compiling gstreamer-video-sys v0.23.6
+   Compiling gstreamer-app-sys v0.23.5
+   Compiling glib v0.20.12
+   Compiling ureq v2.12.1
+   Compiling gstreamer v0.23.7
+   Compiling gstreamer-base v0.23.6
+   Compiling gstreamer-app v0.23.5
+   Compiling gstreamer-video v0.23.6
+   Compiling iced_video_player v0.6.0 (D:\git\third-party\iced_video_player)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 34.86s
