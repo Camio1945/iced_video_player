@@ -1,3 +1,5 @@
+#![windows_subsystem = "windows"]
+
 mod app_handlers;
 mod app_state;
 mod dict;
@@ -13,7 +15,8 @@ use iced::{
     alignment::{Horizontal, Vertical},
     keyboard,
     widget::{
-        Button, Column, Container, PickList, Row, Slider, Space, Text, container, pick_list, text,
+        Button, Column, Container, Image, PickList, Row, Slider, Space, Text, container, pick_list,
+        text,
     },
     window,
 };
@@ -241,7 +244,9 @@ fn build_no_video_screen() -> Element<'static, Message> {
         Column::new()
             .spacing(12)
             .align_x(Horizontal::Center)
-            .push(Text::new("\u{1F3AC}").size(48))
+            .push(Image::new(iced::widget::image::Handle::from_bytes(
+                include_bytes!("../assets/icon.png") as &[u8],
+            )))
             .push(Text::new("No video loaded").size(18))
             .push(Text::new("Click \"Open\" or press O to load a video").size(14))
             .push(
@@ -293,9 +298,22 @@ fn main() -> iced::Result {
         .window(window::Settings {
             size: iced::Size::new(1280.0, 760.0),
             min_size: Some(iced::Size::new(800.0, 480.0)),
+            maximized: true,
+            icon: load_window_icon(),
             ..Default::default()
         })
         .run()
+}
+
+fn load_window_icon() -> Option<window::Icon> {
+    let img = image::load_from_memory_with_format(
+        include_bytes!("../assets/icon.png"),
+        image::ImageFormat::Png,
+    )
+    .ok()?
+    .to_rgba8();
+    let (w, h) = img.dimensions();
+    window::icon::from_rgba(img.into_raw(), w, h).ok()
 }
 
 fn parse_cli_args(args: &[String]) -> (Option<String>, Option<String>) {
