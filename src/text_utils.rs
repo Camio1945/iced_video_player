@@ -43,15 +43,14 @@ pub fn clean_subtitle_text(raw: &str) -> String {
 /// Stop words used both for clickable-word filtering and (optionally) for
 /// extracting meaningful vocabulary from a subtitle line.
 pub const STOP_WORDS: &[&str] = &[
-    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", "at", "by", "for",
-    "from", "in", "of", "on", "to", "with", "as", "is", "was", "are", "were", "be", "been",
-    "being", "am", "do", "does", "did", "done", "have", "has", "had", "having", "will",
-    "would", "should", "could", "can", "may", "might", "must", "shall", "it", "its", "this",
-    "that", "these", "those", "i", "me", "my", "we", "us", "our", "you", "your", "he", "him",
-    "his", "she", "her", "they", "them", "their", "what", "which", "who", "whom", "whose",
-    "not", "no", "nor", "so", "too", "very", "just", "up", "down", "out", "about", "into",
-    "over", "after", "before", "between", "through", "during", "above", "below", "re", "ve",
-    "ll", "s", "t", "don", "didn", "doesn", "won", "isn", "aren", "couldn", "shouldn",
-    "wouldn", "wasn", "weren", "hasn", "haven", "hadn", "mustn", "mightn", "apos", "ndash",
-    "quot", "amp", "lt", "gt",
+    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", "at", "by", "for", "from",
+    "in", "of", "on", "to", "with", "as", "is", "was", "are", "were", "be", "been", "being", "am",
+    "do", "does", "did", "done", "have", "has", "had", "having", "will", "would", "should",
+    "could", "can", "may", "might", "must", "shall", "it", "its", "this", "that", "these", "those",
+    "i", "me", "my", "we", "us", "our", "you", "your", "he", "him", "his", "she", "her", "they",
+    "them", "their", "what", "which", "who", "whom", "whose", "not", "no", "nor", "so", "too",
+    "very", "just", "up", "down", "out", "about", "into", "over", "after", "before", "between",
+    "through", "during", "above", "below", "re", "ve", "ll", "s", "t", "don", "didn", "doesn",
+    "won", "isn", "aren", "couldn", "shouldn", "wouldn", "wasn", "weren", "hasn", "haven", "hadn",
+    "mustn", "mightn", "apos", "ndash", "quot", "amp", "lt", "gt",
 ];

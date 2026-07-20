@@ -145,8 +145,7 @@ fn lookup_english(word: &str) -> (String, Vec<DictSection>, Vec<String>) {
                         for d in m.definitions.iter().take(3) {
                             defs.push((d.definition.clone(), d.example.clone()));
                             if let Some(ex) = &d.example {
-                                if examples.len() < 5
-                                    && !examples.iter().any(|x: &String| x == ex)
+                                if examples.len() < 5 && !examples.iter().any(|x: &String| x == ex)
                                 {
                                     examples.push(ex.clone());
                                 }

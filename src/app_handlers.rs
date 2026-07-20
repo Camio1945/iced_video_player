@@ -89,7 +89,10 @@ impl App {
         self.dict_sections.clear();
         self.dict_examples.clear();
         self.dict_error = None;
-        Task::perform(async move { crate::dict::lookup(&w) }, Message::DictionaryResult)
+        Task::perform(
+            async move { crate::dict::lookup(&w) },
+            Message::DictionaryResult,
+        )
     }
 
     pub fn handle_dictionary_result(&mut self, result: crate::dict::DictResult) -> Task<Message> {

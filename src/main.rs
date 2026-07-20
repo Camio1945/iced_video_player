@@ -1,7 +1,9 @@
 mod app_handlers;
 mod app_state;
 mod dict;
+mod dict_view;
 mod styles;
+mod subtitle_view;
 mod text_utils;
 mod widgets;
 
@@ -11,8 +13,7 @@ use iced::{
     alignment::{Horizontal, Vertical},
     keyboard,
     widget::{
-        Button, Column, Container, PickList, Row, Scrollable, Slider, Space, Text, container,
-        pick_list, rich_text, span, text,
+        Button, Column, Container, PickList, Row, Slider, Space, Text, container, pick_list, text,
     },
     window,
 };
@@ -62,34 +63,16 @@ fn view(app: &App) -> Element<'_, Message> {
         .unwrap_or(app.looping);
     let has_video = matches!(&app.video, VideoState::Ready(_));
 
-    let player_area = Column::new()
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .spacing(0)
-        .push(
-            Container::new(build_video_area(app))
-                .width(Length::Fill)
-                .height(Length::Fill),
-        );
-    let player_area = if app.subtitle_text.is_empty() {
-        player_area
-    } else {
-        player_area.push(build_subtitle_with_clickable_words(&app.subtitle_text))
-    };
-    let player_area = player_area
-        .push(build_seek_bar(app.position, app.video_duration()))
-        .push(build_controls(has_video, is_paused, is_looping, app));
-
     let main_row = Row::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .spacing(0)
         .push(
-            Container::new(player_area)
+            Container::new(build_player_column(app, has_video, is_paused, is_looping))
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
-        .push(build_dictionary_sidebar(app));
+        .push(dict_view::build_dictionary_sidebar(app));
 
     let layout = Column::new()
         .width(Length::Fill)
@@ -105,6 +88,33 @@ fn view(app: &App) -> Element<'_, Message> {
             ..Default::default()
         })
         .into()
+}
+
+fn build_player_column<'a>(
+    app: &'a App,
+    has_video: bool,
+    is_paused: bool,
+    is_looping: bool,
+) -> Column<'a, Message> {
+    let player_area = Column::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .spacing(0)
+        .push(
+            Container::new(build_video_area(app))
+                .width(Length::Fill)
+                .height(Length::Fill),
+        );
+    let player_area = if app.subtitle_text.is_empty() {
+        player_area
+    } else {
+        player_area.push(subtitle_view::build_subtitle_with_clickable_words(
+            &app.subtitle_text,
+        ))
+    };
+    player_area
+        .push(build_seek_bar(app.position, app.video_duration()))
+        .push(build_controls(has_video, is_paused, is_looping, app))
 }
 
 fn build_toolbar<'a>(has_video: bool, position: f64, duration: f64) -> Row<'a, Message> {
@@ -244,281 +254,6 @@ fn build_no_video_screen() -> Element<'static, Message> {
     .height(Length::Fill)
     .style(styles::placeholder)
     .into()
-}
-
-// ── subtitle (clickable words) ───────────────────────────────────────────
-
-use crate::text_utils::STOP_WORDS;
-
-fn is_clickable_word(w: &str) -> bool {
-    if w.len() < 3 {
-        return false;
-    }
-    let lower = w.to_lowercase();
-    if !lower.chars().all(|c| c.is_alphabetic()) {
-        return false;
-    }
-    !STOP_WORDS.contains(&lower.as_str())
-}
-
-fn build_subtitle_with_clickable_words(text: &str) -> Element<'_, Message> {
-    let spans: Vec<_> = build_subtitle_spans(text);
-    Container::new(
-        rich_text(spans)
-            .on_link_click(|w: String| Message::SearchWord(w))
-            .size(17)
-            .align_x(Horizontal::Center)
-            .line_height(iced::widget::text::LineHeight::Relative(1.3))
-            .width(Length::Fill),
-    )
-    .width(Length::Fill)
-    .padding([8, 12])
-    .style(styles::sub_bg)
-    .into()
-}
-
-fn build_subtitle_spans(text: &str) -> Vec<iced::widget::text::Span<'static, String>> {
-    let mut spans: Vec<iced::widget::text::Span<'static, String>> = Vec::new();
-    let mut buf = String::new();
-    let word_color = Color::WHITE;
-    for c in text.chars() {
-        let is_word_char = c.is_alphabetic() || c == '\'' || c == '-';
-        if is_word_char {
-            buf.push(c);
-        } else {
-            if !buf.is_empty() {
-                push_word_span(&mut spans, &buf, word_color);
-                buf.clear();
-            }
-            // Punctuation / whitespace stays as plain text. Collapse
-            // multiple whitespace chars into a single space so that we
-            // don't get huge gaps from newlines stripped earlier.
-            let piece: String = if c.is_whitespace() { " ".into() } else { c.to_string() };
-            spans.push(span(piece).color(word_color));
-        }
-    }
-    if !buf.is_empty() {
-        push_word_span(&mut spans, &buf, word_color);
-    }
-    spans
-}
-
-fn push_word_span(
-    spans: &mut Vec<iced::widget::text::Span<'static, String>>,
-    word: &str,
-    default_color: Color,
-) {
-    // Trim a trailing apostrophe / dash that may be part of surrounding
-    // punctuation (e.g. "don't" inside "don't," should remain attached).
-    let trimmed = word.trim_end_matches(|c: char| c == '\'' || c == '-');
-    let trailing: String = word.chars().skip(trimmed.chars().count()).collect();
-
-    if is_clickable_word(trimmed) {
-        let lower = trimmed.to_lowercase();
-        // Make the link invisible: same white color, no underline.
-        // The user can still click the word, but it doesn't look
-        // visually distinct from non-clickable text.
-        spans.push(
-            span(trimmed.to_string())
-                .color(default_color)
-                .link(lower),
-        );
-    } else {
-        spans.push(span(trimmed.to_string()).color(default_color));
-    }
-    if !trailing.is_empty() {
-        spans.push(span(trailing).color(default_color));
-    }
-}
-
-// ── dictionary side panel ────────────────────────────────────────────────
-
-fn build_dictionary_sidebar(app: &App) -> Element<'_, Message> {
-    let title_text = if app.dict_word.is_empty() {
-        Text::new("\u{1F4D6}  Dictionary").size(14)
-    } else {
-        Text::new(format!("\u{1F4D6}  {}", app.dict_word))
-            .size(15)
-            .color(Color::from_rgb(0.95, 0.9, 0.6))
-    };
-
-    let mut header_row = Row::new()
-        .align_y(Vertical::Center)
-        .padding([8, 10])
-        .push(title_text)
-        .push(Space::new().width(Length::Fill));
-    if !app.dict_word.is_empty() {
-        header_row = header_row.push(
-            Button::new(Text::new("\u{2715}").size(13))
-                .padding([1, 6])
-                .on_press(Message::CloseDictionary)
-                .style(styles::ctrl_btn),
-        );
-    }
-    let header = Container::new(header_row)
-        .width(Length::Fill)
-        .style(styles::sidebar_header);
-
-    let body: Element<'_, Message> = if app.dict_loading {
-        Container::new(
-            Column::new()
-                .spacing(6)
-                .align_x(Horizontal::Center)
-                .padding([24, 12])
-                .push(Text::new("\u{23F3}").size(22))
-                .push(Text::new("Looking up...").size(12)),
-        )
-        .width(Length::Fill)
-        .into()
-    } else if app.dict_word.is_empty() {
-        Container::new(
-            Column::new()
-                .spacing(8)
-                .padding([24, 14])
-                .align_x(Horizontal::Center)
-                .push(
-                    Text::new("\u{1F448}")
-                        .size(28)
-                        .color(Color::from_rgb(0.7, 0.7, 0.75)),
-                )
-                .push(
-                    Text::new("Click a word in the subtitle")
-                        .size(13)
-                        .color(Color::from_rgb(0.85, 0.85, 0.9)),
-                )
-                .push(
-                    Text::new("The Chinese meaning will appear here.")
-                        .size(11)
-                        .color(Color::from_rgb(0.6, 0.6, 0.65)),
-                ),
-        )
-        .width(Length::Fill)
-        .into()
-    } else {
-        build_dictionary_body(app)
-    };
-
-    let body_container = Container::new(
-        Scrollable::new(body)
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .style(|_theme, status| iced::widget::scrollable::default(_theme, status)),
-    )
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(styles::sidebar_body);
-
-    Container::new(
-        Column::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .push(header)
-            .push(body_container),
-    )
-    .width(Length::Fixed(360.0))
-    .height(Length::Fill)
-    .style(styles::sidebar)
-    .into()
-}
-
-fn build_dictionary_body(app: &App) -> Element<'_, Message> {
-    let mut col = Column::new()
-        .spacing(10)
-        .padding([12, 12]);
-
-    // Chinese translation (primary result)
-    if !app.dict_chinese.is_empty() {
-        col = col.push(
-            Container::new(
-                Column::new()
-                    .spacing(2)
-                    .push(
-                        Text::new("\u{4E2D}\u{6587}")
-                            .size(10)
-                            .color(Color::from_rgb(0.75, 0.75, 0.8)),
-                    )
-                    .push(
-                        Text::new(app.dict_chinese.clone())
-                            .size(20)
-                            .color(Color::from_rgb(1.0, 0.82, 0.45)),
-                    ),
-            )
-            .width(Length::Fill)
-            .padding([10, 10])
-            .style(styles::dict_section_card),
-        );
-    }
-
-    // Phonetic
-    if !app.dict_phonetic.is_empty() {
-        col = col.push(
-            Text::new(format!("/{}/", app.dict_phonetic))
-                .size(13)
-                .color(Color::from_rgb(0.75, 0.8, 0.9)),
-        );
-    }
-
-    // English definitions grouped by part of speech
-    for section in &app.dict_sections {
-        let mut sec_col = Column::new().spacing(3);
-        sec_col = sec_col.push(
-            Text::new(format!("[{}]", section.part_of_speech))
-                .size(11)
-                .color(Color::from_rgb(0.55, 0.85, 0.6)),
-        );
-        for (i, (def, example)) in section.definitions.iter().enumerate() {
-            sec_col = sec_col.push(
-                Text::new(format!("{}. {}", i + 1, def))
-                    .size(12)
-                    .color(Color::from_rgb(0.88, 0.88, 0.92))
-                    .wrapping(iced::widget::text::Wrapping::Word)
-                    .width(Length::Fill),
-            );
-            if let Some(ex) = example {
-                sec_col = sec_col.push(
-                    Text::new(format!("    \u{201C}{}\u{201D}", ex))
-                        .size(11)
-                        .color(Color::from_rgb(0.62, 0.62, 0.7))
-                        .wrapping(iced::widget::text::Wrapping::Word)
-                        .width(Length::Fill),
-                );
-            }
-        }
-        col = col.push(sec_col);
-    }
-
-    // Examples (if any are present that aren't already shown inline)
-    if !app.dict_examples.is_empty() {
-        let mut ex_col = Column::new().spacing(2);
-        ex_col = ex_col.push(
-            Text::new("Examples:")
-                .size(11)
-                .color(Color::from_rgb(0.75, 0.75, 0.8)),
-        );
-        for ex in &app.dict_examples {
-            ex_col = ex_col.push(
-                Text::new(format!("\u{2022} {}", ex))
-                    .size(11)
-                    .color(Color::from_rgb(0.78, 0.78, 0.85))
-                    .wrapping(iced::widget::text::Wrapping::Word)
-                    .width(Length::Fill),
-            );
-        }
-        col = col.push(ex_col);
-    }
-
-    // Error message
-    if let Some(err) = &app.dict_error {
-        col = col.push(
-            Text::new(err)
-                .size(12)
-                .color(Color::from_rgb(1.0, 0.55, 0.55)),
-        );
-    }
-
-    Container::new(col)
-        .width(Length::Fill)
-        .into()
 }
 
 // ── subscription ──────────────────────────────────────────────────────────
