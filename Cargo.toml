@@ -1,10 +1,10 @@
 [package]
 name = "iced_video_player"
-description = "A convenient video player widget for Iced"
+description = "A full-featured video player application powered by Iced and GStreamer"
 homepage = "https://github.com/jazzfool/iced_video_player"
 repository = "https://github.com/jazzfool/iced_video_player"
 readme = "README.md"
-keywords = ["gui", "iced", "video"]
+keywords = ["gui", "iced", "video", "player"]
 categories = ["gui", "multimedia"]
 version = "0.6.0"
 authors = ["jazzfool"]
@@ -14,6 +14,10 @@ license = "MIT OR Apache-2.0"
 exclude = [
     ".media/test.mp4"
 ]
+
+[[bin]]
+name = "video-player"
+path = "src/main.rs"
 
 [dependencies]
 iced = { version = "0.14", features = ["image", "advanced", "wgpu"] }
@@ -26,6 +30,10 @@ glib = "0.20" # gobject traits and error type
 log = "0.4"
 thiserror = "1"
 url = "2" # media uri
+rfd = "0.15"      # native file dialogs
+ureq = "2"        # HTTP client for dictionary API
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 
 [package.metadata.docs.rs]
 rustc-args = ["--cfg", "docsrs"]
