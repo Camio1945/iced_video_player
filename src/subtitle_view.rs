@@ -9,21 +9,32 @@ use iced::{
 use crate::app_state::Message;
 
 const SUBTITLE_FONT_SIZE: f32 = 20.0;
-const MAX_CHARS_PER_LINE: usize = 50;
+const MAX_CHARS_PER_LINE: usize = 80;
+const LINE_SPACING: f32 = 2.0;
 
 pub(crate) fn build_subtitle_with_clickable_words(text: &str) -> Element<'_, Message> {
-    let tokens = tokenize(text);
-    let lines = wrap_into_lines(&tokens, MAX_CHARS_PER_LINE);
+    // Split the text on \n FIRST so each source line becomes its own Row.
+    // If we tokenize the whole string and pass \n to a Text widget, Iced
+    // renders it as a line break inside that widget, which (a) collapses
+    // the two source lines into one tall widget, (b) creates a huge visual
+    // gap, and (c) leaves only the first line's words clickable.
     let mut column = Column::new()
-        .spacing(4)
+        .spacing(LINE_SPACING)
         .align_x(Horizontal::Center)
         .width(Length::Fill);
-    for line in lines {
-        let mut row = Row::new().spacing(0);
-        for token in line {
-            row = row.push(build_token(token));
+    for source_line in text.split('\n') {
+        let trimmed = source_line.trim();
+        if trimmed.is_empty() {
+            continue;
         }
-        column = column.push(row);
+        let tokens = tokenize(trimmed);
+        for wrapped_line in wrap_into_lines(&tokens, MAX_CHARS_PER_LINE) {
+            let mut row = Row::new().spacing(0);
+            for token in wrapped_line {
+                row = row.push(build_token(token));
+            }
+            column = column.push(row);
+        }
     }
     Container::new(column)
         .width(Length::Fill)
