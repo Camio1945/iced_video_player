@@ -164,10 +164,7 @@ impl Internal {
     /// Seek to a `ClockTime` position with FLUSH | ACCURATE flags and block until the
     /// pipeline finishes prerolling at the new position.  Used after state transitions
     /// (e.g. loading subtitles) where the pipeline needs a moment to stabilise.
-    pub(crate) fn seek_to_position_and_wait(
-        &self,
-        position: gst::ClockTime,
-    ) -> Result<(), Error> {
+    pub(crate) fn seek_to_position_and_wait(&self, position: gst::ClockTime) -> Result<(), Error> {
         self.source.seek(
             self.speed,
             gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,

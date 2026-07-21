@@ -45,7 +45,7 @@ pub fn active_btn(_: &Theme, status: button::Status) -> button::Style {
 pub fn sub_bg(_: &Theme) -> container::Style {
     container::Style {
         background: Some(iced::Background::Color(Color::from_rgba(
-            0.0, 0.0, 0.0, 0.78,
+            0.0, 0.0, 0.0, 0.50,
         ))),
         ..Default::default()
     }

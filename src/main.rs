@@ -15,8 +15,8 @@ use iced::{
     alignment::{Horizontal, Vertical},
     keyboard,
     widget::{
-        Button, Column, Container, Image, PickList, Row, Slider, Space, Text, container, pick_list,
-        text,
+        Button, Column, Container, Image, PickList, Row, Slider, Space, Stack, Text, container,
+        pick_list, text,
     },
     window,
 };
@@ -101,23 +101,31 @@ fn build_player_column<'a>(
     is_paused: bool,
     is_looping: bool,
 ) -> Column<'a, Message> {
-    let player_area = Column::new()
+    let video_container = Container::new(build_video_area(app))
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+    let player_area: Element<'_, Message> = if app.subtitle_text.is_empty() {
+        video_container.into()
+    } else {
+        Stack::new()
+            .push(video_container)
+            .push(
+                Container::new(subtitle_view::build_subtitle_with_clickable_words(
+                    &app.subtitle_text,
+                ))
+                .width(Length::Fill)
+                .align_bottom(Length::Fill)
+                .padding([0, 48]),
+            )
+            .into()
+    };
+
+    Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .spacing(0)
-        .push(
-            Container::new(build_video_area(app))
-                .width(Length::Fill)
-                .height(Length::Fill),
-        );
-    let player_area = if app.subtitle_text.is_empty() {
-        player_area
-    } else {
-        player_area.push(subtitle_view::build_subtitle_with_clickable_words(
-            &app.subtitle_text,
-        ))
-    };
-    player_area
+        .push(player_area)
         .push(build_seek_bar(app.position, app.video_duration()))
         .push(build_controls(has_video, is_paused, is_looping, app))
 }

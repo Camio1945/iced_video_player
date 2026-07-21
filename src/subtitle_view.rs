@@ -12,13 +12,14 @@ pub(crate) fn build_subtitle_with_clickable_words(text: &str) -> Element<'_, Mes
     Container::new(
         rich_text(spans)
             .on_link_click(|w: String| Message::SearchWord(w))
-            .size(17)
+            .size(20)
             .align_x(Horizontal::Center)
-            .line_height(iced::widget::text::LineHeight::Relative(1.3))
-            .width(Length::Fill),
+            .line_height(iced::widget::text::LineHeight::Relative(1.4))
+            .width(Length::Fill)
+            .wrapping(iced::widget::text::Wrapping::Word),
     )
     .width(Length::Fill)
-    .padding([8, 12])
+    .padding([8, 16])
     .style(crate::styles::sub_bg)
     .into()
 }
