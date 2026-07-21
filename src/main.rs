@@ -245,9 +245,10 @@ fn build_no_video_screen() -> Element<'static, Message> {
             .spacing(12)
             .align_x(Horizontal::Center)
             .push(
-                Image::new(iced::widget::image::Handle::from_bytes(
-                    include_bytes!("../assets/icon.png") as &[u8],
-                ))
+                Image::new(iced::widget::image::Handle::from_bytes(include_bytes!(
+                    "../assets/icon.png"
+                )
+                    as &[u8]))
                 .width(Length::Fixed(140.0)),
             )
             .push(Text::new("No video loaded").size(18))

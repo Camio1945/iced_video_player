@@ -131,12 +131,35 @@ impl Video {
     }
 
     /// Set the subtitle URL to display.
+    /// The video continues playing from its current position without interruption.
     pub fn set_subtitle_url(&mut self, url: &url::Url) -> Result<(), Error> {
         let paused = self.paused();
-        let mut inner = self.get_mut();
+        let inner = self.get_mut();
+
+        // Save the current playback position before the state transition,
+        // since transitioning to Ready resets the position.
+        let position = inner
+            .source
+            .query_position::<gst::ClockTime>()
+            .unwrap_or(gst::ClockTime::ZERO);
+
         inner.source.set_state(gst::State::Ready)?;
         inner.source.set_property("suburi", url.as_str());
-        inner.set_paused(paused);
+
+        // Go to Paused first to preroll the pipeline.  If we went directly to
+        // Playing the pipeline would start playback from 0 before the seek.
+        inner.source.set_state(gst::State::Paused)?;
+        let _ = inner.source.state(gst::ClockTime::from_seconds(5));
+
+        if position != gst::ClockTime::ZERO {
+            inner.seek_to_position_and_wait(position)?;
+        }
+
+        if !paused {
+            inner.source.set_state(gst::State::Playing)?;
+            let _ = inner.source.state(gst::ClockTime::from_seconds(5));
+        }
+
         Ok(())
     }
 

@@ -161,6 +161,29 @@ impl Internal {
         Ok(())
     }
 
+    /// Seek to a `ClockTime` position with FLUSH | ACCURATE flags and block until the
+    /// pipeline finishes prerolling at the new position.  Used after state transitions
+    /// (e.g. loading subtitles) where the pipeline needs a moment to stabilise.
+    pub(crate) fn seek_to_position_and_wait(
+        &self,
+        position: gst::ClockTime,
+    ) -> Result<(), Error> {
+        self.source.seek(
+            self.speed,
+            gst::SeekFlags::FLUSH | gst::SeekFlags::ACCURATE,
+            gst::SeekType::Set,
+            position,
+            gst::SeekType::End,
+            gst::ClockTime::from_seconds(0),
+        )?;
+        // The FLUSH seek makes the pipeline go through Ready -> Paused again to
+        // preroll at the new position.  Without this wait the subsequent
+        // set_state(Playing) will return Async before the preroll finishes,
+        // leaving the pipeline stuck in Paused with no frames.
+        let _ = self.source.state(gst::ClockTime::from_seconds(5));
+        Ok(())
+    }
+
     pub(crate) fn restart_stream(&mut self) -> Result<(), Error> {
         self.is_eos = false;
         self.set_paused(false);
