@@ -1,4 +1,3 @@
-use crate::text_utils::STOP_WORDS;
 use iced::{
     Color, Element, Length,
     alignment::Horizontal,
@@ -100,11 +99,10 @@ fn build_token(token: Token) -> Element<'static, Message> {
         Token::Word(w) => {
             let (trimmed, trailing) = split_word_token(&w);
             let mut row = Row::new().spacing(0);
-            if is_clickable_word(trimmed) {
-                row = row.push(make_clickable_word(trimmed.to_string()));
-            } else {
-                row = row.push(make_plain_text(trimmed.to_string()));
-            }
+            // Every word is clickable, including short ones ("it", "me", "go"),
+            // words with apostrophes ("It's", "Don't"), and common words
+            // ("the"). The user expects to be able to look up any word.
+            row = row.push(make_clickable_word(trimmed.to_string()));
             if !trailing.is_empty() {
                 row = row.push(make_plain_text(trailing));
             }
@@ -133,15 +131,4 @@ fn make_clickable_word(word: String) -> MouseArea<'static, Message, iced::Theme,
     MouseArea::new(make_plain_text(word))
         .on_press(Message::SearchWord(lower))
         .interaction(mouse::Interaction::Pointer)
-}
-
-fn is_clickable_word(w: &str) -> bool {
-    if w.len() < 3 {
-        return false;
-    }
-    let lower = w.to_lowercase();
-    if !lower.chars().all(|c| c.is_alphabetic()) {
-        return false;
-    }
-    !STOP_WORDS.contains(&lower.as_str())
 }

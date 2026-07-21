@@ -40,8 +40,10 @@ pub fn clean_subtitle_text(raw: &str) -> String {
     s.trim().to_string()
 }
 
-/// Stop words used both for clickable-word filtering and (optionally) for
-/// extracting meaningful vocabulary from a subtitle line.
+/// Stop words kept for potential future use (e.g. excluding common words
+/// from vocabulary extraction).  All subtitle words are currently
+/// clickable, so this list is no longer consulted at render time.
+#[allow(dead_code)]
 pub const STOP_WORDS: &[&str] = &[
     "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", "at", "by", "for", "from",
     "in", "of", "on", "to", "with", "as", "is", "was", "are", "were", "be", "been", "being", "am",
