@@ -12,21 +12,20 @@ const MAX_CHARS_PER_LINE: usize = 80;
 const LINE_SPACING: f32 = 2.0;
 
 pub(crate) fn build_subtitle_with_clickable_words(text: &str) -> Element<'_, Message> {
-    // Split the text on \n FIRST so each source line becomes its own Row.
-    // If we tokenize the whole string and pass \n to a Text widget, Iced
-    // renders it as a line break inside that widget, which (a) collapses
-    // the two source lines into one tall widget, (b) creates a huge visual
-    // gap, and (c) leaves only the first line's words clickable.
     let mut column = Column::new()
         .spacing(LINE_SPACING)
         .align_x(Horizontal::Center)
         .width(Length::Fill);
-    for source_line in text.split('\n') {
-        let trimmed = source_line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let tokens = tokenize(trimmed);
+
+    // Collect non-empty source lines so we can try to merge short ones.
+    let source_lines: Vec<&str> = text
+        .split('\n')
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+
+    for display_line in merge_short_lines(&source_lines, MAX_CHARS_PER_LINE) {
+        let tokens = tokenize(&display_line);
         for wrapped_line in wrap_into_lines(&tokens, MAX_CHARS_PER_LINE) {
             let mut row = Row::new().spacing(0);
             for token in wrapped_line {
@@ -35,11 +34,33 @@ pub(crate) fn build_subtitle_with_clickable_words(text: &str) -> Element<'_, Mes
             column = column.push(row);
         }
     }
+
     Container::new(column)
         .width(Length::Fill)
         .padding([8, 16])
         .style(crate::styles::sub_bg)
         .into()
+}
+
+/// Greedily merge consecutive source lines into display lines.
+/// Two adjacent source lines are combined (with a space) as long as the
+/// result fits within `max_chars`.  This avoids forcing every source
+/// line break into a separate visual row when the subtitle background is
+/// wide enough to hold them on one line.
+fn merge_short_lines(lines: &[&str], max_chars: usize) -> Vec<String> {
+    let mut merged: Vec<String> = Vec::new();
+    for &line in lines {
+        if let Some(last) = merged.last_mut() {
+            // +1 for the space that would join the two lines
+            if last.chars().count() + 1 + line.chars().count() <= max_chars {
+                last.push(' ');
+                last.push_str(line);
+                continue;
+            }
+        }
+        merged.push(line.to_string());
+    }
+    merged
 }
 
 #[derive(Debug, Clone)]
