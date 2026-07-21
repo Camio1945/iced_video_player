@@ -80,6 +80,7 @@ pub(crate) struct Internal {
     pub(crate) duration: Duration,
     pub(crate) speed: f64,
     pub(crate) sync_av: bool,
+    pub(crate) builtin_text_subtitle: bool,
 
     pub(crate) frame: Arc<Mutex<Frame>>,
     pub(crate) upload_frame: Arc<AtomicBool>,

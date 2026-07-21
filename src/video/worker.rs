@@ -36,7 +36,7 @@ impl Video {
         std::thread::spawn(move || {
             let mut clear_subtitles_at = None;
             while alive_ref.load(Ordering::Acquire) {
-                if let Err(e) = Self::process_single_video_frame(
+                match Self::process_single_video_frame(
                     &video_sink,
                     text_sink.as_ref(),
                     &pipeline_ref,
@@ -47,7 +47,8 @@ impl Video {
                     &upload_text_ref,
                     &mut clear_subtitles_at,
                 ) {
-                    log::error!("error pulling frame: {e:?}");
+                    Ok(()) | Err(gst::FlowError::Eos) => {}
+                    Err(e) => log::error!("error pulling frame: {e:?}"),
                 }
             }
         })
@@ -120,17 +121,16 @@ impl Video {
     ) -> Result<(), gst::FlowError> {
         let text = text_sink.and_then(|sink| sink.try_pull_sample(gst::ClockTime::from_seconds(0)));
         if let Some(text) = text {
-            let text = text.buffer().ok_or(gst::FlowError::Error)?;
-            let text_duration = text.duration().ok_or(gst::FlowError::Error)?;
-            let map = text.map_readable().map_err(|_| gst::FlowError::Error)?;
-            let text = std::str::from_utf8(map.as_slice())
-                .map_err(|_| gst::FlowError::Error)?
-                .to_string();
-            *subtitle_text_ref
-                .lock()
-                .map_err(|_| gst::FlowError::Error)? = Some(text);
-            upload_text_ref.store(true, Ordering::SeqCst);
-            *clear_subtitles_at = Some(frame_pts + text_duration);
+            let buffer = text.buffer().ok_or(gst::FlowError::Error)?;
+            let text_duration = buffer.duration().unwrap_or(gst::ClockTime::from_seconds(4));
+            let map = buffer.map_readable().map_err(|_| gst::FlowError::Error)?;
+            if let Ok(text) = std::str::from_utf8(map.as_slice()) {
+                *subtitle_text_ref
+                    .lock()
+                    .map_err(|_| gst::FlowError::Error)? = Some(text.to_string());
+                upload_text_ref.store(true, Ordering::SeqCst);
+                *clear_subtitles_at = Some(frame_pts + text_duration);
+            }
         }
         Ok(())
     }

@@ -69,6 +69,8 @@ impl Video {
         let (width, height, framerate, duration, sync_av) =
             Self::extract_pipeline_properties(&pipeline, &pad)?;
 
+        let builtin_text_subtitle = Self::auto_select_english_streams(&pipeline);
+
         let (alive, worker, frame, upload_frame, last_frame_time, subtitle_text, upload_text) =
             Self::setup_state_and_worker(video_sink, text_sink, &pipeline);
 
@@ -82,12 +84,26 @@ impl Video {
             framerate,
             duration,
             sync_av,
+            builtin_text_subtitle,
             frame,
             upload_frame,
             last_frame_time,
             subtitle_text,
             upload_text,
         ))
+    }
+
+    /// Disable playbin's text flag before preroll so a sparse bitmap subtitle
+    /// (PGS/DVD) linked into the text appsink cannot stall the pipeline.
+    /// NOTE: `flags` is a GstPlayFlags GFlags value, not a gint — use the
+    /// string form to avoid a "Value type mismatch" panic.
+    fn disable_text_flag(pipeline: &gst::Pipeline) {
+        pipeline.set_property_from_str("flags", "video+audio");
+    }
+
+    /// Re-enable playbin's text flag (safe string-form GFlags assignment).
+    fn enable_text_flag(pipeline: &gst::Pipeline) {
+        pipeline.set_property_from_str("flags", "video+audio+text");
     }
 
     fn extract_pipeline_properties(
@@ -102,6 +118,8 @@ impl Video {
                 })
             };
         }
+
+        Self::disable_text_flag(pipeline);
 
         cleanup!(pipeline.set_state(gst::State::Playing))?;
         cleanup!(pipeline.state(gst::ClockTime::from_seconds(5)).0)?;
@@ -185,6 +203,7 @@ impl Video {
         framerate: f64,
         duration: Duration,
         sync_av: bool,
+        builtin_text_subtitle: bool,
         frame: Arc<Mutex<Frame>>,
         upload_frame: Arc<AtomicBool>,
         last_frame_time: Arc<Mutex<Instant>>,
@@ -195,7 +214,8 @@ impl Video {
         let internal = Internal {
             id, bus: pipeline.bus().unwrap(), source: pipeline, alive,
             worker: Some(worker), width, height, framerate, duration,
-            speed: 1.0, sync_av, frame, upload_frame, last_frame_time,
+            speed: 1.0, sync_av, builtin_text_subtitle,
+            frame, upload_frame, last_frame_time,
             looping: false, is_eos: false, restart_stream: false,
             sync_av_avg: 0, sync_av_counter: 0, subtitle_text, upload_text,
         };
@@ -250,5 +270,125 @@ impl Video {
             subtitle_text_ref,
             upload_text_ref,
         )
+    }
+
+    /// Auto-select English audio and subtitle streams from the playbin pipeline.
+    /// Called after the pipeline has transitioned to Playing state so that
+    /// the stream collection is available.
+    /// Returns `true` when a text-based subtitle stream was selected and
+    /// playbin's text flag was re-enabled.
+    fn auto_select_english_streams(pipeline: &gst::Pipeline) -> bool {
+        let Some(collection) = Self::find_stream_collection(pipeline) else {
+            return false;
+        };
+        let mut streams = Vec::new();
+        for i in 0..collection.len() {
+            if let Some(s) = collection.stream(i as u32) {
+                let stype = s.stream_type();
+                let is_eng = Self::stream_is_english(&s);
+                let is_text = s
+                    .caps()
+                    .map(|c| Self::caps_is_text_subtitle(&c))
+                    .unwrap_or(false);
+                let is_pgs = s
+                    .caps()
+                    .map(|c| Self::caps_is_pgs_subtitle(&c))
+                    .unwrap_or(false);
+                log::info!(
+                    "stream #{i}: type={stype:?} english={is_eng} text_subtitle={is_text} pgs={is_pgs}"
+                );
+                streams.push((i as i32, stype, is_eng, is_text));
+            }
+        }
+        Self::select_english_audio(pipeline, &streams);
+        Self::select_english_subtitle(pipeline, &streams)
+    }
+
+    fn find_stream_collection(pipeline: &gst::Pipeline) -> Option<gst::StreamCollection> {
+        let bus = pipeline.bus()?;
+        let mut msg_iter = bus.iter_filtered(&[gst::MessageType::Element]);
+        msg_iter.find_map(|msg| match msg.view() {
+            gst::MessageView::Element(ev) => ev
+                .structure()
+                .and_then(|s| s.get::<gst::StreamCollection>("collection").ok()),
+            _ => None,
+        })
+    }
+
+    fn stream_is_english(stream: &gst::Stream) -> bool {
+        stream
+            .tags()
+            .and_then(|tags| tags.get::<gst::tags::LanguageCode>())
+            .map(|lang| {
+                let l = lang.get().to_lowercase();
+                l == "en" || l.starts_with("en-")
+            })
+            .unwrap_or(false)
+    }
+
+    /// Whether the caps describe a text-based subtitle format.
+    fn caps_is_text_subtitle(caps: &gst::Caps) -> bool {
+        caps.structure(0)
+            .map(|s| {
+                let n = s.name();
+                n.starts_with("text/")
+                    || n.starts_with("application/x-subtitle")
+                    || n.starts_with("application/x-ssa")
+                    || n.starts_with("application/x-ass")
+                    || n.starts_with("subtitle/x-")
+                    || n.starts_with("application/x-teletext")
+            })
+            .unwrap_or(false)
+    }
+
+    /// Whether the caps describe a PGS (Blu-ray presentation graphics) stream.
+    fn caps_is_pgs_subtitle(caps: &gst::Caps) -> bool {
+        caps.structure(0)
+            .map(|s| s.name() == "subpicture/x-pgs")
+            .unwrap_or(false)
+    }
+
+    fn select_english_audio(
+        pipeline: &gst::Pipeline,
+        streams: &[(i32, gst::StreamType, bool, bool)],
+    ) {
+        let audio: Vec<_> = streams
+            .iter()
+            .filter(|(_, t, _, _)| *t == gst::StreamType::AUDIO)
+            .collect();
+        if audio.len() <= 1 {
+            return;
+        }
+        if let Some(&(idx, ..)) = audio.iter().find(|(_, _, eng, _)| *eng) {
+            pipeline.set_property("current-audio", idx);
+            log::info!("Auto-selected English audio stream #{idx}");
+        }
+    }
+
+    fn select_english_subtitle(
+        pipeline: &gst::Pipeline,
+        streams: &[(i32, gst::StreamType, bool, bool)],
+    ) -> bool {
+        let text_subs: Vec<(i32, bool)> = streams
+            .iter()
+            .filter(|(_, t, _, is_text)| *t == gst::StreamType::TEXT && *is_text)
+            .map(|&(idx, _, eng, _)| (idx, eng))
+            .collect();
+        if text_subs.is_empty() {
+            // Only bitmap (PGS/DVD/DVB) or no subtitle streams.  Keep the
+            // text flag disabled so the pipeline is not linked to a sparse
+            // subpicture stream that would stall playback.
+            return false;
+        }
+        // Re-enable playbin's text flag, disabled before preroll.
+        Self::enable_text_flag(pipeline);
+        let chosen = text_subs
+            .iter()
+            .find(|(_, eng)| *eng)
+            .map(|&(idx, _)| idx)
+            .unwrap_or_else(|| text_subs[0].0);
+        pipeline.set_property("current-text", chosen);
+        log::info!("Auto-selected text subtitle stream #{chosen}");
+        true
     }
 }

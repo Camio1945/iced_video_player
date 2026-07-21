@@ -5,6 +5,7 @@ mod app_state;
 mod dict;
 mod dict_view;
 mod styles;
+mod subtitle_discovery;
 mod subtitle_view;
 mod text_utils;
 mod widgets;

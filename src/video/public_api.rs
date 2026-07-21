@@ -136,6 +136,13 @@ impl Video {
         let paused = self.paused();
         let inner = self.get_mut();
 
+        // Re-enable playbin's text flag (disabled when no built-in text
+        // subtitle stream exists).  NOTE: `flags` is a GstPlayFlags GFlags
+        // value, not a gint — use the string form to avoid a panic.
+        inner
+            .source
+            .set_property_from_str("flags", "video+audio+text");
+
         // Save the current playback position before the state transition,
         // since transitioning to Ready resets the position.
         let position = inner
@@ -172,6 +179,17 @@ impl Video {
                 .property::<Option<String>>("current-suburi")?,
         )
         .ok()
+    }
+
+    /// Get the number of built-in subtitle/text streams.
+    pub fn subtitle_stream_count(&self) -> i32 {
+        self.read().source.property("n-text")
+    }
+
+    /// Check if the video has a built-in **text-based** subtitle stream that
+    /// can be rendered (bitmap formats such as PGS/DVD are excluded).
+    pub fn has_builtin_subtitles(&self) -> bool {
+        self.read().builtin_text_subtitle
     }
 
     /// Get the underlying GStreamer pipeline.

@@ -227,18 +227,10 @@ impl App {
                 let url = url::Url::from_file_path(std::path::Path::new(ps)).unwrap();
                 match iced_video_player::Video::new(&url) {
                     Ok(v) => {
+                        let has_builtin = v.has_builtin_subtitles();
                         self.video = VideoState::Ready(v);
                         self.position = 0.0;
-                        // Apply any pending subtitle
-                        if let Some(sp) = self.pending_subtitle.take() {
-                            if let Ok(sub_url) = url::Url::from_file_path(&sp) {
-                                if let VideoState::Ready(ref mut vv) = self.video {
-                                    if let Err(e) = vv.set_subtitle_url(&sub_url) {
-                                        eprintln!("Subtitle error: {}", e);
-                                    }
-                                }
-                            }
-                        }
+                        self.apply_subtitle_auto(ps, has_builtin);
                     }
                     Err(e) => {
                         self.video = VideoState::NoVideo;
@@ -252,6 +244,35 @@ impl App {
             }
         }
         Task::none()
+    }
+
+    fn apply_subtitle_auto(&mut self, video_path: &str, has_builtin: bool) {
+        // 1) Explicit subtitle from CLI takes priority
+        if let Some(sp) = self.pending_subtitle.take() {
+            if let Ok(sub_url) = url::Url::from_file_path(&sp) {
+                if let VideoState::Ready(ref mut vv) = self.video {
+                    if let Err(e) = vv.set_subtitle_url(&sub_url) {
+                        eprintln!("Subtitle error: {}", e);
+                    }
+                }
+            }
+            return;
+        }
+
+        // 2) If no built-in English subtitles, auto-discover external files
+        if !has_builtin {
+            if let Some(sub_path) =
+                crate::subtitle_discovery::find_english_subtitle_file(video_path)
+            {
+                if let Ok(sub_url) = url::Url::from_file_path(&sub_path) {
+                    if let VideoState::Ready(ref mut vv) = self.video {
+                        if let Err(e) = vv.set_subtitle_url(&sub_url) {
+                            eprintln!("Subtitle error: {}", e);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     pub fn handle_load_subtitle(&mut self) -> Task<Message> {
