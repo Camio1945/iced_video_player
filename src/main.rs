@@ -107,17 +107,11 @@ fn build_player_column<'a>(app: &'a App, is_paused: bool, is_looping: bool) -> E
         .push(build_seek_bar(app.position, app.video_duration()))
         .push(build_controls(is_paused, is_looping, app));
 
-    Stack::new()
+    Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .push(build_player_area(app))
-        .push(
-            Column::new()
-                .width(Length::Fill)
-                .height(Length::Fill)
-                .push(Space::new().height(Length::Fill))
-                .push(bottom_panel),
-        )
+        .push(bottom_panel)
         .into()
 }
 
