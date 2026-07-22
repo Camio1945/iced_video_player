@@ -6,6 +6,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+pub(crate) struct SubtitleRefs {
+    pub text: Arc<Mutex<Option<String>>>,
+    pub upload_text: Arc<AtomicBool>,
+    pub image: Arc<Mutex<Option<crate::pgs::PgsImage>>>,
+    pub upload_image: Arc<AtomicBool>,
+}
+
 impl Video {
     pub(crate) fn try_pull_video_sample(
         video_sink: &gst_app::AppSink,
@@ -22,6 +29,7 @@ impl Video {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn spawn_frame_worker(
         video_sink: gst_app::AppSink,
         text_sink: Option<gst_app::AppSink>,
@@ -30,10 +38,18 @@ impl Video {
         upload_frame_ref: Arc<AtomicBool>,
         alive_ref: Arc<AtomicBool>,
         last_frame_time_ref: Arc<Mutex<Instant>>,
-        subtitle_text_ref: Arc<Mutex<Option<String>>>,
-        upload_text_ref: Arc<AtomicBool>,
+        subtitle_text: Arc<Mutex<Option<String>>>,
+        upload_text: Arc<AtomicBool>,
+        subtitle_image: Arc<Mutex<Option<crate::pgs::PgsImage>>>,
+        upload_image: Arc<AtomicBool>,
     ) -> std::thread::JoinHandle<()> {
         std::thread::spawn(move || {
+            let sub_refs = SubtitleRefs {
+                text: subtitle_text,
+                upload_text,
+                image: subtitle_image,
+                upload_image,
+            };
             let mut clear_subtitles_at = None;
             while alive_ref.load(Ordering::Acquire) {
                 match Self::process_single_video_frame(
@@ -43,8 +59,7 @@ impl Video {
                     &frame_ref,
                     &upload_frame_ref,
                     &last_frame_time_ref,
-                    &subtitle_text_ref,
-                    &upload_text_ref,
+                    &sub_refs,
                     &mut clear_subtitles_at,
                 ) {
                     Ok(()) | Err(gst::FlowError::Eos) => {}
@@ -61,8 +76,7 @@ impl Video {
         frame_ref: &Arc<Mutex<Frame>>,
         upload_frame_ref: &Arc<AtomicBool>,
         last_frame_time_ref: &Arc<Mutex<Instant>>,
-        subtitle_text_ref: &Arc<Mutex<Option<String>>>,
-        upload_text_ref: &Arc<AtomicBool>,
+        sub_refs: &SubtitleRefs,
         clear_subtitles_at: &mut Option<gst::ClockTime>,
     ) -> Result<(), gst::FlowError> {
         let sample = Self::try_pull_video_sample(video_sink, pipeline_ref)?;
@@ -78,35 +92,23 @@ impl Video {
         }
         upload_frame_ref.swap(true, Ordering::SeqCst);
 
-        Self::clear_expired_subtitles(
-            frame_pts,
-            clear_subtitles_at,
-            subtitle_text_ref,
-            upload_text_ref,
-        )?;
-        Self::pull_subtitle_sample(
-            text_sink,
-            subtitle_text_ref,
-            upload_text_ref,
-            frame_pts,
-            clear_subtitles_at,
-        )?;
+        Self::clear_expired_subtitles(frame_pts, clear_subtitles_at, sub_refs)?;
+        Self::pull_subtitle_sample(text_sink, sub_refs, frame_pts, clear_subtitles_at)?;
         Ok(())
     }
 
     pub(crate) fn clear_expired_subtitles(
         frame_pts: gst::ClockTime,
         clear_subtitles_at: &mut Option<gst::ClockTime>,
-        subtitle_text_ref: &Arc<Mutex<Option<String>>>,
-        upload_text_ref: &Arc<AtomicBool>,
+        sub_refs: &SubtitleRefs,
     ) -> Result<(), gst::FlowError> {
         if let Some(at) = clear_subtitles_at
             && frame_pts >= *at
         {
-            *subtitle_text_ref
-                .lock()
-                .map_err(|_| gst::FlowError::Error)? = None;
-            upload_text_ref.store(true, Ordering::SeqCst);
+            *sub_refs.text.lock().map_err(|_| gst::FlowError::Error)? = None;
+            sub_refs.upload_text.store(true, Ordering::SeqCst);
+            *sub_refs.image.lock().map_err(|_| gst::FlowError::Error)? = None;
+            sub_refs.upload_image.store(true, Ordering::SeqCst);
             *clear_subtitles_at = None;
         }
         Ok(())
@@ -114,23 +116,28 @@ impl Video {
 
     pub(crate) fn pull_subtitle_sample(
         text_sink: Option<&gst_app::AppSink>,
-        subtitle_text_ref: &Arc<Mutex<Option<String>>>,
-        upload_text_ref: &Arc<AtomicBool>,
+        sub_refs: &SubtitleRefs,
         frame_pts: gst::ClockTime,
         clear_subtitles_at: &mut Option<gst::ClockTime>,
     ) -> Result<(), gst::FlowError> {
-        let text = text_sink.and_then(|sink| sink.try_pull_sample(gst::ClockTime::from_seconds(0)));
-        if let Some(text) = text {
-            let buffer = text.buffer().ok_or(gst::FlowError::Error)?;
-            let text_duration = buffer.duration().unwrap_or(gst::ClockTime::from_seconds(4));
-            let map = buffer.map_readable().map_err(|_| gst::FlowError::Error)?;
-            if let Ok(text) = std::str::from_utf8(map.as_slice()) {
-                *subtitle_text_ref
-                    .lock()
-                    .map_err(|_| gst::FlowError::Error)? = Some(text.to_string());
-                upload_text_ref.store(true, Ordering::SeqCst);
-                *clear_subtitles_at = Some(frame_pts + text_duration);
-            }
+        let sample =
+            text_sink.and_then(|sink| sink.try_pull_sample(gst::ClockTime::from_seconds(0)));
+        let Some(sample) = sample else {
+            return Ok(());
+        };
+        let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
+        let duration = buffer.duration().unwrap_or(gst::ClockTime::from_seconds(4));
+        let map = buffer.map_readable().map_err(|_| gst::FlowError::Error)?;
+        let data = map.as_slice();
+
+        if let Ok(text) = std::str::from_utf8(data) {
+            *sub_refs.text.lock().map_err(|_| gst::FlowError::Error)? = Some(text.to_string());
+            sub_refs.upload_text.store(true, Ordering::SeqCst);
+            *clear_subtitles_at = Some(frame_pts + duration);
+        } else if let Some(img) = crate::pgs::decode(data) {
+            *sub_refs.image.lock().map_err(|_| gst::FlowError::Error)? = Some(img);
+            sub_refs.upload_image.store(true, Ordering::SeqCst);
+            *clear_subtitles_at = Some(frame_pts + duration);
         }
         Ok(())
     }

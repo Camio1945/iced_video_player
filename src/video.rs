@@ -93,22 +93,25 @@ pub(crate) struct Internal {
 
     pub(crate) subtitle_text: Arc<Mutex<Option<String>>>,
     pub(crate) upload_text: Arc<AtomicBool>,
+    pub(crate) subtitle_image: Arc<Mutex<Option<crate::pgs::PgsImage>>>,
+    pub(crate) upload_image: Arc<AtomicBool>,
 }
 
 impl Internal {
     pub(crate) fn seek(&self, position: impl Into<Position>, accurate: bool) -> Result<(), Error> {
         let position = position.into();
+        let flags = gst::SeekFlags::FLUSH
+            | if accurate {
+                gst::SeekFlags::ACCURATE
+            } else {
+                gst::SeekFlags::empty()
+            };
 
         // gstreamer complains if the start & end value types aren't the same
         match &position {
             Position::Time(_) => self.source.seek(
                 self.speed,
-                gst::SeekFlags::FLUSH
-                    | if accurate {
-                        gst::SeekFlags::ACCURATE
-                    } else {
-                        gst::SeekFlags::empty()
-                    },
+                flags,
                 gst::SeekType::Set,
                 gst::GenericFormattedValue::from(position),
                 gst::SeekType::Set,
@@ -116,12 +119,7 @@ impl Internal {
             )?,
             Position::Frame(_) => self.source.seek(
                 self.speed,
-                gst::SeekFlags::FLUSH
-                    | if accurate {
-                        gst::SeekFlags::ACCURATE
-                    } else {
-                        gst::SeekFlags::empty()
-                    },
+                flags,
                 gst::SeekType::Set,
                 gst::GenericFormattedValue::from(position),
                 gst::SeekType::Set,
@@ -129,10 +127,15 @@ impl Internal {
             )?,
         };
 
+        self.clear_subtitles();
+        Ok(())
+    }
+
+    fn clear_subtitles(&self) {
         *self.subtitle_text.lock().expect("lock subtitle_text") = None;
         self.upload_text.store(true, Ordering::SeqCst);
-
-        Ok(())
+        *self.subtitle_image.lock().expect("lock subtitle_image") = None;
+        self.upload_image.store(true, Ordering::SeqCst);
     }
 
     pub(crate) fn set_speed(&mut self, speed: f64) -> Result<(), Error> {

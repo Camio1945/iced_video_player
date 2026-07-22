@@ -46,6 +46,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         Message::LoadSubtitle => app.handle_load_subtitle(),
         Message::SubtitlePicked(p) => app.handle_subtitle_picked(p),
         Message::SubtitleText(t) => app.handle_subtitle_text(t),
+        Message::SubtitleImage(i) => app.handle_subtitle_image(i),
         Message::SearchWord(w) => app.handle_search_word(w),
         Message::DictionaryResult(r) => app.handle_dictionary_result(r),
         Message::CloseDictionary => app.handle_close_dictionary(),
@@ -102,33 +103,53 @@ fn build_player_column<'a>(
     is_paused: bool,
     is_looping: bool,
 ) -> Column<'a, Message> {
-    let video_container = Container::new(build_video_area(app))
-        .width(Length::Fill)
-        .height(Length::Fill);
-
-    let player_area: Element<'_, Message> = if app.subtitle_text.is_empty() {
-        video_container.into()
-    } else {
-        Stack::new()
-            .push(video_container)
-            .push(
-                Container::new(subtitle_view::build_subtitle_with_clickable_words(
-                    &app.subtitle_text,
-                ))
-                .width(Length::Fill)
-                .align_bottom(Length::Fill)
-                .padding([0, 48]),
-            )
-            .into()
-    };
-
     Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
         .spacing(0)
-        .push(player_area)
+        .push(build_player_area(app))
         .push(build_seek_bar(app.position, app.video_duration()))
         .push(build_controls(has_video, is_paused, is_looping, app))
+}
+
+fn build_player_area(app: &App) -> Element<'_, Message> {
+    let video_container = Container::new(build_video_area(app))
+        .width(Length::Fill)
+        .height(Length::Fill);
+
+    let has_text_sub = !app.subtitle_text.is_empty();
+    let has_image_sub = app.subtitle_image.is_some();
+    if !has_text_sub && !has_image_sub {
+        return video_container.into();
+    }
+
+    let mut stack = Stack::new().push(video_container);
+    if let Some(ref handle) = app.subtitle_image {
+        stack = stack.push(build_image_subtitle_layer(handle));
+    }
+    if has_text_sub {
+        stack = stack.push(build_text_subtitle_layer(&app.subtitle_text));
+    }
+    stack.into()
+}
+
+fn build_image_subtitle_layer(handle: &iced::widget::image::Handle) -> Container<'_, Message> {
+    Container::new(Container::new(Image::new(handle.clone())).center_x(Length::Fill))
+        .width(Length::Fill)
+        .align_bottom(Length::Fill)
+        .padding(iced::Padding {
+            top: 0.0,
+            right: 0.0,
+            bottom: 40.0,
+            left: 0.0,
+        })
+}
+
+fn build_text_subtitle_layer(text: &str) -> Container<'_, Message> {
+    Container::new(subtitle_view::build_subtitle_with_clickable_words(text))
+        .width(Length::Fill)
+        .align_bottom(Length::Fill)
+        .padding([0, 48])
 }
 
 fn build_toolbar<'a>(has_video: bool, position: f64, duration: f64) -> Row<'a, Message> {
@@ -228,6 +249,7 @@ fn build_video_player_widget<'a>(
         .on_end_of_stream(Message::EndOfStream)
         .on_new_frame(Message::NewFrame)
         .on_subtitle_text(|t: Option<String>| Message::SubtitleText(t.unwrap_or_default()))
+        .on_subtitle_image(Message::SubtitleImage)
         .on_error(|e: &glib::Error| Message::PlaybackError(e.to_string()))
         .into()
 }

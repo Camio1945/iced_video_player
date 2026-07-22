@@ -7,15 +7,21 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, RwLock};
 use std::time::{Duration, Instant};
 
-type SharedFrameState = (
-    Arc<AtomicBool>,
-    std::thread::JoinHandle<()>,
-    Arc<Mutex<Frame>>,
-    Arc<AtomicBool>,
-    Arc<Mutex<Instant>>,
-    Arc<Mutex<Option<String>>>,
-    Arc<AtomicBool>,
-);
+struct SubtitleShared {
+    text: Arc<Mutex<Option<String>>>,
+    upload_text: Arc<AtomicBool>,
+    image: Arc<Mutex<Option<crate::pgs::PgsImage>>>,
+    upload_image: Arc<AtomicBool>,
+}
+
+struct WorkerSetup {
+    alive: Arc<AtomicBool>,
+    worker: std::thread::JoinHandle<()>,
+    frame: Arc<Mutex<Frame>>,
+    upload_frame: Arc<AtomicBool>,
+    last_frame_time: Arc<Mutex<Instant>>,
+    subtitle: SubtitleShared,
+}
 
 impl Video {
     /// Create a new video player from a given video which loads from `uri`.
@@ -66,45 +72,20 @@ impl Video {
         let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
 
         let pad = video_sink.pads().first().cloned().unwrap();
-        let (width, height, framerate, duration, sync_av) =
-            Self::extract_pipeline_properties(&pipeline, &pad)?;
-
+        let props = Self::extract_pipeline_properties(&pipeline, &pad)?;
         let builtin_text_subtitle = Self::auto_select_english_streams(&pipeline);
-
-        let (alive, worker, frame, upload_frame, last_frame_time, subtitle_text, upload_text) =
-            Self::setup_state_and_worker(video_sink, text_sink, &pipeline);
+        let setup = Self::setup_state_and_worker(video_sink, text_sink, &pipeline);
 
         Ok(Self::make_video_internal(
             id,
             pipeline,
-            alive,
-            worker,
-            width,
-            height,
-            framerate,
-            duration,
-            sync_av,
+            props,
             builtin_text_subtitle,
-            frame,
-            upload_frame,
-            last_frame_time,
-            subtitle_text,
-            upload_text,
+            setup,
         ))
     }
 
-    /// Disable playbin's text flag before preroll so a sparse bitmap subtitle
-    /// (PGS/DVD) linked into the text appsink cannot stall the pipeline.
-    /// NOTE: `flags` is a GstPlayFlags GFlags value, not a gint — use the
-    /// string form to avoid a "Value type mismatch" panic.
-    fn disable_text_flag(pipeline: &gst::Pipeline) {
-        pipeline.set_property_from_str("flags", "video+audio");
-    }
 
-    /// Re-enable playbin's text flag (safe string-form GFlags assignment).
-    fn enable_text_flag(pipeline: &gst::Pipeline) {
-        pipeline.set_property_from_str("flags", "video+audio+text");
-    }
 
     fn extract_pipeline_properties(
         pipeline: &gst::Pipeline,
@@ -118,8 +99,6 @@ impl Video {
                 })
             };
         }
-
-        Self::disable_text_flag(pipeline);
 
         cleanup!(pipeline.set_state(gst::State::Playing))?;
         cleanup!(pipeline.state(gst::ClockTime::from_seconds(5)).0)?;
@@ -158,7 +137,7 @@ impl Video {
         video_sink: gst_app::AppSink,
         text_sink: Option<gst_app::AppSink>,
         pipeline: &gst::Pipeline,
-    ) -> SharedFrameState {
+    ) -> WorkerSetup {
         let (
             frame,
             upload_frame,
@@ -169,8 +148,7 @@ impl Video {
             alive_ref,
             last_frame_time_ref,
         ) = Self::create_shared_video_state();
-        let (subtitle_text, upload_text, subtitle_text_ref, upload_text_ref) =
-            Self::create_shared_subtitle_state();
+        let subtitle = Self::create_shared_subtitle_state();
         let worker = Self::spawn_frame_worker(
             video_sink,
             text_sink,
@@ -179,45 +157,43 @@ impl Video {
             upload_frame_ref,
             alive_ref,
             last_frame_time_ref,
-            subtitle_text_ref,
-            upload_text_ref,
+            Arc::clone(&subtitle.text),
+            Arc::clone(&subtitle.upload_text),
+            Arc::clone(&subtitle.image),
+            Arc::clone(&subtitle.upload_image),
         );
-        (
+        WorkerSetup {
             alive,
             worker,
             frame,
             upload_frame,
             last_frame_time,
-            subtitle_text,
-            upload_text,
-        )
+            subtitle,
+        }
     }
 
     fn make_video_internal(
         id: u64,
         pipeline: gst::Pipeline,
-        alive: Arc<AtomicBool>,
-        worker: std::thread::JoinHandle<()>,
-        width: i32,
-        height: i32,
-        framerate: f64,
-        duration: Duration,
-        sync_av: bool,
+        props: (i32, i32, f64, Duration, bool),
         builtin_text_subtitle: bool,
-        frame: Arc<Mutex<Frame>>,
-        upload_frame: Arc<AtomicBool>,
-        last_frame_time: Arc<Mutex<Instant>>,
-        subtitle_text: Arc<Mutex<Option<String>>>,
-        upload_text: Arc<AtomicBool>,
+        setup: WorkerSetup,
     ) -> Video {
+        let (width, height, framerate, duration, sync_av) = props;
         #[rustfmt::skip]
         let internal = Internal {
-            id, bus: pipeline.bus().unwrap(), source: pipeline, alive,
-            worker: Some(worker), width, height, framerate, duration,
+            id, bus: pipeline.bus().unwrap(), source: pipeline,
+            alive: setup.alive, worker: Some(setup.worker),
+            width, height, framerate, duration,
             speed: 1.0, sync_av, builtin_text_subtitle,
-            frame, upload_frame, last_frame_time,
+            frame: setup.frame, upload_frame: setup.upload_frame,
+            last_frame_time: setup.last_frame_time,
             looping: false, is_eos: false, restart_stream: false,
-            sync_av_avg: 0, sync_av_counter: 0, subtitle_text, upload_text,
+            sync_av_avg: 0, sync_av_counter: 0,
+            subtitle_text: setup.subtitle.text,
+            upload_text: setup.subtitle.upload_text,
+            subtitle_image: setup.subtitle.image,
+            upload_image: setup.subtitle.upload_image,
         };
         Video(RwLock::new(internal))
     }
@@ -254,76 +230,110 @@ impl Video {
         )
     }
 
-    fn create_shared_subtitle_state() -> (
-        Arc<Mutex<Option<String>>>,
-        Arc<AtomicBool>,
-        Arc<Mutex<Option<String>>>,
-        Arc<AtomicBool>,
-    ) {
-        let subtitle_text = Arc::new(Mutex::new(None));
-        let upload_text = Arc::new(AtomicBool::new(false));
-        let subtitle_text_ref = Arc::clone(&subtitle_text);
-        let upload_text_ref = Arc::clone(&upload_text);
-        (
-            subtitle_text,
-            upload_text,
-            subtitle_text_ref,
-            upload_text_ref,
-        )
+    fn create_shared_subtitle_state() -> SubtitleShared {
+        SubtitleShared {
+            text: Arc::new(Mutex::new(None)),
+            upload_text: Arc::new(AtomicBool::new(false)),
+            image: Arc::new(Mutex::new(None)),
+            upload_image: Arc::new(AtomicBool::new(false)),
+        }
     }
 
     /// Auto-select English audio and subtitle streams from the playbin pipeline.
     /// Called after the pipeline has transitioned to Playing state so that
-    /// the stream collection is available.
-    /// Returns `true` when a text-based subtitle stream was selected and
-    /// playbin's text flag was re-enabled.
+    /// stream pads and tags are available.
+    /// Returns `true` when a subtitle stream was selected.
+    ///
+    /// Uses the playbin2 API (`n-text`, `get-text-pad`, `get-text-tags`)
+    /// because `playbin` in GStreamer 1.x is playbin2, which does not post
+    /// stream-collection messages.
     fn auto_select_english_streams(pipeline: &gst::Pipeline) -> bool {
-        let Some(collection) = Self::find_stream_collection(pipeline) else {
-            return false;
-        };
-        let mut streams = Vec::new();
-        for i in 0..collection.len() {
-            if let Some(s) = collection.stream(i as u32) {
-                let stype = s.stream_type();
-                let is_eng = Self::stream_is_english(&s);
-                let is_text = s
-                    .caps()
-                    .map(|c| Self::caps_is_text_subtitle(&c))
-                    .unwrap_or(false);
-                let is_pgs = s
-                    .caps()
-                    .map(|c| Self::caps_is_pgs_subtitle(&c))
-                    .unwrap_or(false);
-                log::info!(
-                    "stream #{i}: type={stype:?} english={is_eng} text_subtitle={is_text} pgs={is_pgs}"
-                );
-                streams.push((i as i32, stype, is_eng, is_text));
-            }
-        }
-        Self::select_english_audio(pipeline, &streams);
-        Self::select_english_subtitle(pipeline, &streams)
+        Self::select_english_audio(pipeline);
+        Self::select_english_subtitle(pipeline)
     }
 
-    fn find_stream_collection(pipeline: &gst::Pipeline) -> Option<gst::StreamCollection> {
-        let bus = pipeline.bus()?;
-        let mut msg_iter = bus.iter_filtered(&[gst::MessageType::Element]);
-        msg_iter.find_map(|msg| match msg.view() {
-            gst::MessageView::Element(ev) => ev
-                .structure()
-                .and_then(|s| s.get::<gst::StreamCollection>("collection").ok()),
-            _ => None,
+    fn select_english_audio(pipeline: &gst::Pipeline) {
+        let n_audio: i32 = pipeline.property("n-audio");
+        if n_audio <= 1 {
+            return;
+        }
+        for i in 0..n_audio {
+            let is_eng = Self::stream_language(pipeline, "get-audio-tags", i)
+                .map(|l| Self::is_english(&l))
+                .unwrap_or(false);
+            if is_eng {
+                pipeline.set_property("current-audio", i);
+                log::info!("Auto-selected English audio stream #{i}");
+                return;
+            }
+        }
+    }
+
+    fn select_english_subtitle(pipeline: &gst::Pipeline) -> bool {
+        let n_text: i32 = pipeline.property("n-text");
+        if n_text == 0 {
+            return false;
+        }
+        let subs: Vec<SubtitleStreamInfo> = (0..n_text)
+            .map(|i| Self::probe_subtitle_stream(pipeline, i))
+            .collect();
+
+        // Prefer text-based English, then PGS English, then any text, then any PGS.
+        let chosen = subs
+            .iter()
+            .find(|s| s.english && s.is_text)
+            .or_else(|| subs.iter().find(|s| s.english && s.is_pgs))
+            .or_else(|| subs.iter().find(|s| s.is_text))
+            .or_else(|| subs.iter().find(|s| s.is_pgs));
+        let Some(sub) = chosen else {
+            return false;
+        };
+        pipeline.set_property("current-text", sub.index);
+        let kind = if sub.is_pgs { "PGS" } else { "text" };
+        log::info!(
+            "Auto-selected {kind} subtitle stream #{} (english={})",
+            sub.index,
+            sub.english
+        );
+        true
+    }
+
+    fn probe_subtitle_stream(pipeline: &gst::Pipeline, index: i32) -> SubtitleStreamInfo {
+        let pad: Option<gst::Pad> = pipeline.emit_by_name("get-text-pad", &[&index]);
+        let caps = pad.and_then(|p| p.current_caps());
+        let is_text = caps
+            .as_ref()
+            .map(|c| Self::caps_is_text_subtitle(c))
+            .unwrap_or(false);
+        let is_pgs = caps
+            .as_ref()
+            .map(|c| Self::caps_is_pgs_subtitle(c))
+            .unwrap_or(false);
+        let english = Self::stream_language(pipeline, "get-text-tags", index)
+            .map(|l| Self::is_english(&l))
+            .unwrap_or(false);
+        log::info!(
+            "subtitle stream #{index}: english={english} text={is_text} pgs={is_pgs} caps={caps:?}"
+        );
+        SubtitleStreamInfo {
+            index,
+            english,
+            is_text,
+            is_pgs,
+        }
+    }
+
+    fn stream_language(pipeline: &gst::Pipeline, signal: &str, index: i32) -> Option<String> {
+        let tags: Option<gst::TagList> = pipeline.emit_by_name(signal, &[&index]);
+        tags.and_then(|t| {
+            t.get::<gst::tags::LanguageCode>()
+                .map(|l| l.get().to_string())
         })
     }
 
-    fn stream_is_english(stream: &gst::Stream) -> bool {
-        stream
-            .tags()
-            .and_then(|tags| tags.get::<gst::tags::LanguageCode>())
-            .map(|lang| {
-                let l = lang.get().to_lowercase();
-                l == "en" || l.starts_with("en-")
-            })
-            .unwrap_or(false)
+    fn is_english(lang: &str) -> bool {
+        let l = lang.to_lowercase();
+        l == "en" || l == "eng" || l.starts_with("en-") || l.starts_with("eng-")
     }
 
     /// Whether the caps describe a text-based subtitle format.
@@ -347,48 +357,11 @@ impl Video {
             .map(|s| s.name() == "subpicture/x-pgs")
             .unwrap_or(false)
     }
+}
 
-    fn select_english_audio(
-        pipeline: &gst::Pipeline,
-        streams: &[(i32, gst::StreamType, bool, bool)],
-    ) {
-        let audio: Vec<_> = streams
-            .iter()
-            .filter(|(_, t, _, _)| *t == gst::StreamType::AUDIO)
-            .collect();
-        if audio.len() <= 1 {
-            return;
-        }
-        if let Some(&(idx, ..)) = audio.iter().find(|(_, _, eng, _)| *eng) {
-            pipeline.set_property("current-audio", idx);
-            log::info!("Auto-selected English audio stream #{idx}");
-        }
-    }
-
-    fn select_english_subtitle(
-        pipeline: &gst::Pipeline,
-        streams: &[(i32, gst::StreamType, bool, bool)],
-    ) -> bool {
-        let text_subs: Vec<(i32, bool)> = streams
-            .iter()
-            .filter(|(_, t, _, is_text)| *t == gst::StreamType::TEXT && *is_text)
-            .map(|&(idx, _, eng, _)| (idx, eng))
-            .collect();
-        if text_subs.is_empty() {
-            // Only bitmap (PGS/DVD/DVB) or no subtitle streams.  Keep the
-            // text flag disabled so the pipeline is not linked to a sparse
-            // subpicture stream that would stall playback.
-            return false;
-        }
-        // Re-enable playbin's text flag, disabled before preroll.
-        Self::enable_text_flag(pipeline);
-        let chosen = text_subs
-            .iter()
-            .find(|(_, eng)| *eng)
-            .map(|&(idx, _)| idx)
-            .unwrap_or_else(|| text_subs[0].0);
-        pipeline.set_property("current-text", chosen);
-        log::info!("Auto-selected text subtitle stream #{chosen}");
-        true
-    }
+struct SubtitleStreamInfo {
+    index: i32,
+    english: bool,
+    is_text: bool,
+    is_pgs: bool,
 }

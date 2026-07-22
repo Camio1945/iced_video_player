@@ -21,6 +21,7 @@ where
     on_end_of_stream: Option<Message>,
     on_new_frame: Option<Message>,
     on_subtitle_text: Option<Box<dyn Fn(Option<String>) -> Message + 'a>>,
+    on_subtitle_image: Option<Box<dyn Fn(Option<crate::pgs::PgsImage>) -> Message + 'a>>,
     on_error: Option<Box<dyn Fn(&glib::Error) -> Message + 'a>>,
     _phantom: PhantomData<(Theme, Renderer)>,
 }
@@ -39,6 +40,7 @@ where
             on_end_of_stream: None,
             on_new_frame: None,
             on_subtitle_text: None,
+            on_subtitle_image: None,
             on_error: None,
             _phantom: Default::default(),
         }
@@ -91,6 +93,18 @@ where
     {
         VideoPlayer {
             on_subtitle_text: Some(Box::new(on_subtitle_text)),
+            ..self
+        }
+    }
+
+    /// Message to send when a bitmap subtitle (e.g. PGS) is decoded.
+    /// `None` means the current subtitle should be cleared.
+    pub fn on_subtitle_image<F>(self, on_subtitle_image: F) -> Self
+    where
+        F: 'a + Fn(Option<crate::pgs::PgsImage>) -> Message,
+    {
+        VideoPlayer {
+            on_subtitle_image: Some(Box::new(on_subtitle_image)),
             ..self
         }
     }
@@ -234,6 +248,7 @@ fn handle_active_redraw<Message: Clone, Theme, Renderer: PrimitiveRenderer>(
         inner,
         player.on_new_frame.clone(),
         &player.on_subtitle_text,
+        &player.on_subtitle_image,
         shell,
     );
     shell.request_redraw();
@@ -254,6 +269,7 @@ fn notify_frame_and_subtitle<Message: Clone>(
     inner: &mut crate::video::Internal,
     on_new_frame: Option<Message>,
     on_subtitle_text: &Option<Box<dyn Fn(Option<String>) -> Message + '_>>,
+    on_subtitle_image: &Option<Box<dyn Fn(Option<crate::pgs::PgsImage>) -> Message + '_>>,
     shell: &mut advanced::Shell<'_, Message>,
 ) {
     if inner.upload_frame.load(Ordering::SeqCst)
@@ -266,6 +282,12 @@ fn notify_frame_and_subtitle<Message: Clone>(
         && let Ok(text) = inner.subtitle_text.try_lock()
     {
         shell.publish(on_subtitle_text(text.clone()));
+    }
+    if let Some(on_subtitle_image) = on_subtitle_image
+        && inner.upload_image.swap(false, Ordering::SeqCst)
+        && let Ok(img) = inner.subtitle_image.try_lock()
+    {
+        shell.publish(on_subtitle_image(img.clone()));
     }
 }
 

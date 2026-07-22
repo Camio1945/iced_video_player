@@ -80,6 +80,15 @@ impl App {
         Task::none()
     }
 
+    pub fn handle_subtitle_image(
+        &mut self,
+        img: Option<iced_video_player::pgs::PgsImage>,
+    ) -> Task<Message> {
+        self.subtitle_image =
+            img.map(|i| iced::widget::image::Handle::from_rgba(i.width, i.height, i.rgba));
+        Task::none()
+    }
+
     pub fn handle_search_word(&mut self, word: String) -> Task<Message> {
         let w = word.clone();
         self.dict_word = word;
@@ -204,6 +213,7 @@ impl App {
             self.video = VideoState::Loading(ps.clone());
             self.current_file_path = Some(ps.clone());
             self.subtitle_text.clear();
+            self.subtitle_image = None;
             self.clear_dictionary();
             self.pending_subtitle = None;
             let url = url::Url::from_file_path(&path).unwrap();
