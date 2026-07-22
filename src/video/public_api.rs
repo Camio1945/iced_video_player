@@ -198,6 +198,8 @@ impl Video {
     }
 
     /// Get the underlying GStreamer pipeline.
+    ///
+    /// Returns a cheaply-cloned reference-counted handle to the pipeline.
     pub fn pipeline(&self) -> gst::Pipeline {
         self.read().source.clone()
     }

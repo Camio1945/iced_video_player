@@ -49,7 +49,11 @@ fn extract_pgs_to_srt(
     sub_index: i32,
     out_srt: &Path,
 ) -> Result<(), String> {
-    let sup = std::env::temp_dir().join(format!("ivp_extract_{}.sup", std::process::id()));
+    let sup = std::env::temp_dir().join(format!(
+        "ivp_extract_{}_{}.sup",
+        std::process::id(),
+        sub_index
+    ));
     let map = format!("0:s:{sub_index}");
     run_ffmpeg(
         ffmpeg,
@@ -234,9 +238,7 @@ mod win_ocr {
                 image::imageops::FilterType::CatmullRom,
             );
             let mut bmp = std::io::Cursor::new(Vec::new());
-            resized
-                .write_to(&mut bmp, image::ImageFormat::Bmp)
-                .ok()?;
+            resized.write_to(&mut bmp, image::ImageFormat::Bmp).ok()?;
             Some(bmp.into_inner())
         }
     }

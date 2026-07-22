@@ -3,4 +3,6 @@
 .idea
 # Third-party source codes
 **/source_codes
-**/git_ignores
+docs/git_ignores/
+player_bottom.png
+build_err.txt

@@ -77,14 +77,14 @@ impl Video {
             Self::auto_select_english_streams(&pipeline);
         let setup = Self::setup_state_and_worker(video_sink, text_sink, &pipeline);
 
-        Ok(Self::make_video_internal(
+        Self::make_video_internal(
             id,
             pipeline,
             props,
             builtin_text_subtitle,
             subtitle_streams,
             setup,
-        ))
+        )
     }
 
     fn extract_pipeline_properties(
@@ -179,11 +179,12 @@ impl Video {
         builtin_text_subtitle: bool,
         subtitle_streams: Vec<SubtitleStreamInfo>,
         setup: WorkerSetup,
-    ) -> Video {
+    ) -> Result<Video, Error> {
         let (width, height, framerate, duration, sync_av) = props;
+        let bus = pipeline.bus().ok_or(Error::Bus)?;
         #[rustfmt::skip]
         let internal = Internal {
-            id, bus: pipeline.bus().unwrap(), source: pipeline,
+            id, bus, source: pipeline,
             alive: setup.alive, worker: Some(setup.worker),
             width, height, framerate, duration,
             speed: 1.0, sync_av, builtin_text_subtitle, subtitle_streams,
@@ -196,7 +197,7 @@ impl Video {
             subtitle_image: setup.subtitle.image,
             upload_image: setup.subtitle.upload_image,
         };
-        Video(RwLock::new(internal))
+        Ok(Video(RwLock::new(internal)))
     }
 
     fn create_shared_video_state() -> (

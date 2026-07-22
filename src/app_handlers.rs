@@ -5,10 +5,10 @@ use std::time::Duration;
 
 impl App {
     pub fn handle_toggle_pause(&mut self) -> Task<Message> {
-        if let Some(_) = self.with_video_mut(|v| {
+        if let VideoState::Ready(ref mut v) = self.video {
             let p = v.paused();
             v.set_paused(!p);
-        }) {}
+        }
         Task::none()
     }
 
@@ -215,7 +215,8 @@ impl App {
             self.subtitle_image = None;
             self.clear_dictionary();
             self.pending_subtitle = None;
-            let url = url::Url::from_file_path(&path).unwrap();
+            let url = url::Url::from_file_path(&path)
+                .unwrap_or_else(|_| url::Url::parse(&format!("file:///{}", ps)).unwrap());
             Task::perform(
                 async move {
                     match iced_video_player::Video::new(&url) {
@@ -233,7 +234,8 @@ impl App {
     pub fn handle_file_opened(&mut self, result: Result<String, String>) -> Task<Message> {
         match result {
             Ok(ref ps) => {
-                let url = url::Url::from_file_path(std::path::Path::new(ps)).unwrap();
+                let url = url::Url::from_file_path(std::path::Path::new(ps))
+                    .unwrap_or_else(|_| url::Url::parse(&format!("file:///{}", ps)).unwrap());
                 match iced_video_player::Video::new(&url) {
                     Ok(v) => {
                         self.video = VideoState::Ready(v);
@@ -340,12 +342,13 @@ impl App {
 
     pub fn handle_subtitle_picked(&mut self, path: Option<std::path::PathBuf>) -> Task<Message> {
         if let Some(path) = path {
-            let url = url::Url::from_file_path(&path).unwrap();
+            let ps = path.display().to_string();
+            let url = url::Url::from_file_path(&path)
+                .unwrap_or_else(|_| url::Url::parse(&format!("file:///{}", ps)).unwrap());
             if let Some(Err(e)) = self.with_video_mut(|v| v.set_subtitle_url(&url)) {
                 eprintln!("Failed to load subtitle: {}", e);
             }
         }
         Task::none()
     }
-
 }
