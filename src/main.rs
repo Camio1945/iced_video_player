@@ -1,11 +1,13 @@
 #![windows_subsystem = "windows"]
 
 mod app_handlers;
+mod app_keyboard;
 mod app_state;
 mod dict;
 mod dict_view;
 mod styles;
 mod subtitle_discovery;
+mod subtitle_extract;
 mod subtitle_view;
 mod text_utils;
 mod widgets;
@@ -47,6 +49,7 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         Message::SubtitlePicked(p) => app.handle_subtitle_picked(p),
         Message::SubtitleText(t) => app.handle_subtitle_text(t),
         Message::SubtitleImage(i) => app.handle_subtitle_image(i),
+        Message::SubtitleExtracted(r) => app.handle_subtitle_extracted(r),
         Message::SearchWord(w) => app.handle_search_word(w),
         Message::DictionaryResult(r) => app.handle_dictionary_result(r),
         Message::CloseDictionary => app.handle_close_dictionary(),

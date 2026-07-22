@@ -35,6 +35,16 @@ ureq = "2"        # HTTP client for dictionary API
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 image = "0.25"    # load PNG for window icon
+# Windows.Media.Ocr for converting embedded PGS bitmap subtitles to SRT
+windows = { version = "0.61", features = [
+    "Media_Ocr",
+    "Graphics_Imaging",
+    "Storage_Streams",
+    "Foundation",
+    "Foundation_Collections",
+    "Globalization",
+    "Win32_System_WinRT",
+] }
 
 [build-dependencies]
 winres = "0.1"

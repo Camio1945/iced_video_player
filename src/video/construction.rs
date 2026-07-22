@@ -1,4 +1,4 @@
-use super::{Frame, Internal, Video};
+use super::{Frame, Internal, SubtitleStreamInfo, Video};
 use crate::Error;
 use gstreamer as gst;
 use gstreamer_app as gst_app;
@@ -73,7 +73,8 @@ impl Video {
 
         let pad = video_sink.pads().first().cloned().unwrap();
         let props = Self::extract_pipeline_properties(&pipeline, &pad)?;
-        let builtin_text_subtitle = Self::auto_select_english_streams(&pipeline);
+        let (builtin_text_subtitle, subtitle_streams) =
+            Self::auto_select_english_streams(&pipeline);
         let setup = Self::setup_state_and_worker(video_sink, text_sink, &pipeline);
 
         Ok(Self::make_video_internal(
@@ -81,11 +82,10 @@ impl Video {
             pipeline,
             props,
             builtin_text_subtitle,
+            subtitle_streams,
             setup,
         ))
     }
-
-
 
     fn extract_pipeline_properties(
         pipeline: &gst::Pipeline,
@@ -177,6 +177,7 @@ impl Video {
         pipeline: gst::Pipeline,
         props: (i32, i32, f64, Duration, bool),
         builtin_text_subtitle: bool,
+        subtitle_streams: Vec<SubtitleStreamInfo>,
         setup: WorkerSetup,
     ) -> Video {
         let (width, height, framerate, duration, sync_av) = props;
@@ -185,7 +186,7 @@ impl Video {
             id, bus: pipeline.bus().unwrap(), source: pipeline,
             alive: setup.alive, worker: Some(setup.worker),
             width, height, framerate, duration,
-            speed: 1.0, sync_av, builtin_text_subtitle,
+            speed: 1.0, sync_av, builtin_text_subtitle, subtitle_streams,
             frame: setup.frame, upload_frame: setup.upload_frame,
             last_frame_time: setup.last_frame_time,
             looping: false, is_eos: false, restart_stream: false,
@@ -242,14 +243,17 @@ impl Video {
     /// Auto-select English audio and subtitle streams from the playbin pipeline.
     /// Called after the pipeline has transitioned to Playing state so that
     /// stream pads and tags are available.
-    /// Returns `true` when a subtitle stream was selected.
+    /// Returns whether a subtitle stream was selected, plus the probed list
+    /// of all embedded subtitle streams.
     ///
     /// Uses the playbin2 API (`n-text`, `get-text-pad`, `get-text-tags`)
     /// because `playbin` in GStreamer 1.x is playbin2, which does not post
     /// stream-collection messages.
-    fn auto_select_english_streams(pipeline: &gst::Pipeline) -> bool {
+    fn auto_select_english_streams(pipeline: &gst::Pipeline) -> (bool, Vec<SubtitleStreamInfo>) {
         Self::select_english_audio(pipeline);
-        Self::select_english_subtitle(pipeline)
+        let subs = Self::probe_all_subtitle_streams(pipeline);
+        let selected = Self::select_english_subtitle(pipeline, &subs);
+        (selected, subs)
     }
 
     fn select_english_audio(pipeline: &gst::Pipeline) {
@@ -269,15 +273,7 @@ impl Video {
         }
     }
 
-    fn select_english_subtitle(pipeline: &gst::Pipeline) -> bool {
-        let n_text: i32 = pipeline.property("n-text");
-        if n_text == 0 {
-            return false;
-        }
-        let subs: Vec<SubtitleStreamInfo> = (0..n_text)
-            .map(|i| Self::probe_subtitle_stream(pipeline, i))
-            .collect();
-
+    fn select_english_subtitle(pipeline: &gst::Pipeline, subs: &[SubtitleStreamInfo]) -> bool {
         // Prefer text-based English, then PGS English, then any text, then any PGS.
         let chosen = subs
             .iter()
@@ -298,6 +294,13 @@ impl Video {
         true
     }
 
+    fn probe_all_subtitle_streams(pipeline: &gst::Pipeline) -> Vec<SubtitleStreamInfo> {
+        let n_text: i32 = pipeline.property("n-text");
+        (0..n_text)
+            .map(|i| Self::probe_subtitle_stream(pipeline, i))
+            .collect()
+    }
+
     fn probe_subtitle_stream(pipeline: &gst::Pipeline, index: i32) -> SubtitleStreamInfo {
         let pad: Option<gst::Pad> = pipeline.emit_by_name("get-text-pad", &[&index]);
         let caps = pad.and_then(|p| p.current_caps());
@@ -309,9 +312,8 @@ impl Video {
             .as_ref()
             .map(|c| Self::caps_is_pgs_subtitle(c))
             .unwrap_or(false);
-        let english = Self::stream_language(pipeline, "get-text-tags", index)
-            .map(|l| Self::is_english(&l))
-            .unwrap_or(false);
+        let language = Self::stream_language(pipeline, "get-text-tags", index);
+        let english = language.as_deref().map(Self::is_english).unwrap_or(false);
         log::info!(
             "subtitle stream #{index}: english={english} text={is_text} pgs={is_pgs} caps={caps:?}"
         );
@@ -320,6 +322,7 @@ impl Video {
             english,
             is_text,
             is_pgs,
+            language,
         }
     }
 
@@ -357,11 +360,4 @@ impl Video {
             .map(|s| s.name() == "subpicture/x-pgs")
             .unwrap_or(false)
     }
-}
-
-struct SubtitleStreamInfo {
-    index: i32,
-    english: bool,
-    is_text: bool,
-    is_pgs: bool,
 }

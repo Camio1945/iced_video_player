@@ -133,10 +133,16 @@ impl Video {
         if let Ok(text) = std::str::from_utf8(data) {
             *sub_refs.text.lock().map_err(|_| gst::FlowError::Error)? = Some(text.to_string());
             sub_refs.upload_text.store(true, Ordering::SeqCst);
+            // A text subtitle supersedes any bitmap subtitle (e.g. after an
+            // external SRT replaced an embedded PGS stream).
+            *sub_refs.image.lock().map_err(|_| gst::FlowError::Error)? = None;
+            sub_refs.upload_image.store(true, Ordering::SeqCst);
             *clear_subtitles_at = Some(frame_pts + duration);
         } else if let Some(img) = crate::pgs::decode(data) {
             *sub_refs.image.lock().map_err(|_| gst::FlowError::Error)? = Some(img);
             sub_refs.upload_image.store(true, Ordering::SeqCst);
+            *sub_refs.text.lock().map_err(|_| gst::FlowError::Error)? = None;
+            sub_refs.upload_text.store(true, Ordering::SeqCst);
             *clear_subtitles_at = Some(frame_pts + duration);
         }
         Ok(())

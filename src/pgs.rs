@@ -28,6 +28,50 @@ struct OdsPart {
     rle_data: Vec<u8>,
 }
 
+/// A display set parsed from a `.sup` stream, with its presentation time.
+#[derive(Debug)]
+pub struct PgsDisplaySet {
+    /// Presentation timestamp in seconds (from the stream start).
+    pub pts_seconds: f64,
+    /// The decoded subtitle image, or `None` for a clear/empty set.
+    pub image: Option<PgsImage>,
+}
+
+/// Parse a `.sup` stream (13-byte segment headers with PTS) into timestamped
+/// display sets.  Only decodable content sets produce `Some(image)`; clear
+/// sets are kept so callers can derive subtitle end times.
+pub fn parse_sup(data: &[u8]) -> Vec<PgsDisplaySet> {
+    let mut out = Vec::new();
+    let mut pos = 0usize;
+    let mut set_start = 0usize;
+    let mut set_pts = 0u32;
+
+    while pos + 13 <= data.len() {
+        if data[pos] != 0x50 || data[pos + 1] != 0x47 {
+            break;
+        }
+        let pts = u32::from_be_bytes([data[pos + 2], data[pos + 3], data[pos + 4], data[pos + 5]]);
+        let seg_type = data[pos + 10];
+        let seg_size = u16::from_be_bytes([data[pos + 11], data[pos + 12]]) as usize;
+        if pos + 13 + seg_size > data.len() {
+            break;
+        }
+        // A PCS segment anchors the start of a display set.
+        if seg_type == 0x16 {
+            set_start = pos;
+            set_pts = pts;
+        }
+        pos += 13 + seg_size;
+        if seg_type == 0x80 {
+            out.push(PgsDisplaySet {
+                pts_seconds: set_pts as f64 / 90000.0,
+                image: decode(&data[set_start..pos]),
+            });
+        }
+    }
+    out
+}
+
 /// Try to decode a PGS display set from raw binary data.
 /// Returns `None` if the data doesn't look like PGS or is incomplete.
 ///
@@ -46,20 +90,7 @@ pub fn decode(data: &[u8]) -> Option<PgsImage> {
 
     let mut pos = 0;
     while pos + header_size <= data.len() {
-        let (seg_type, seg_size) = if with_headers {
-            if data[pos] != 0x50 || data[pos + 1] != 0x47 {
-                return None; // not PGS magic
-            }
-            (
-                data[pos + 10],
-                u16::from_be_bytes([data[pos + 11], data[pos + 12]]) as usize,
-            )
-        } else {
-            (
-                data[pos],
-                u16::from_be_bytes([data[pos + 1], data[pos + 2]]) as usize,
-            )
-        };
+        let (seg_type, seg_size) = read_seg_header(data, pos, with_headers)?;
         if pos + header_size + seg_size > data.len() {
             break;
         }
@@ -81,6 +112,21 @@ pub fn decode(data: &[u8]) -> Option<PgsImage> {
         pos += header_size + seg_size;
     }
     None
+}
+
+fn read_seg_header(data: &[u8], pos: usize, with_headers: bool) -> Option<(u8, usize)> {
+    if with_headers {
+        if data[pos] != 0x50 || data[pos + 1] != 0x47 {
+            return None;
+        }
+        let seg_type = data[pos + 10];
+        let seg_size = u16::from_be_bytes([data[pos + 11], data[pos + 12]]) as usize;
+        Some((seg_type, seg_size))
+    } else {
+        let seg_type = data[pos];
+        let seg_size = u16::from_be_bytes([data[pos + 1], data[pos + 2]]) as usize;
+        Some((seg_type, seg_size))
+    }
 }
 
 /// Palette Definition Segment.

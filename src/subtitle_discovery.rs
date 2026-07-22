@@ -44,21 +44,40 @@ fn collect_subtitle_candidates(
     Some(candidates)
 }
 
-/// Prefer the default/English subtitle: the one where the remainder
-/// consists of only the extension (e.g. ".srt" → empty, vs ".zh-CN.srt").
+/// Prefer the default/English subtitle: first the one whose remainder is
+/// only the extension (e.g. ".srt" → empty), then one with an explicit
+/// English suffix (".en", ".eng", ".en-US"...), then the first candidate.
 fn pick_best_subtitle_candidate(
     candidates: &mut Vec<(std::path::PathBuf, String)>,
 ) -> Option<std::path::PathBuf> {
     for (path, remainder) in candidates.iter() {
-        let remainder_no_ext = if let Some(dot_pos) = remainder.rfind('.') {
-            &remainder[..dot_pos]
-        } else {
-            remainder
-        };
-        if remainder_no_ext.is_empty() {
+        if strip_extension(remainder).is_empty() {
+            return Some(path.clone());
+        }
+    }
+    for (path, remainder) in candidates.iter() {
+        if is_english_suffix(strip_extension(remainder)) {
             return Some(path.clone());
         }
     }
     // Fallback: return the first candidate
     Some(candidates.remove(0).0)
+}
+
+/// Remove the subtitle extension from the remainder, e.g. ".zh-CN.srt" → ".zh-CN".
+fn strip_extension(remainder: &str) -> &str {
+    if let Some(dot_pos) = remainder.rfind('.') {
+        &remainder[..dot_pos]
+    } else {
+        remainder
+    }
+}
+
+/// Whether a remainder suffix marks the subtitle as English, e.g. ".en".
+fn is_english_suffix(suffix_no_ext: &str) -> bool {
+    let s = suffix_no_ext
+        .trim_start_matches('.')
+        .to_lowercase()
+        .replace('_', "-");
+    s == "en" || s == "eng" || s == "english" || s.starts_with("en-") || s.starts_with("eng-")
 }

@@ -55,6 +55,7 @@ use gstreamer as gst;
 use thiserror::Error;
 
 pub use video::Position;
+pub use video::SubtitleStreamInfo;
 pub use video::Video;
 pub use video_player::VideoPlayer;
 

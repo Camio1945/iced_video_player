@@ -81,6 +81,7 @@ pub(crate) struct Internal {
     pub(crate) speed: f64,
     pub(crate) sync_av: bool,
     pub(crate) builtin_text_subtitle: bool,
+    pub(crate) subtitle_streams: Vec<SubtitleStreamInfo>,
 
     pub(crate) frame: Arc<Mutex<Frame>>,
     pub(crate) upload_frame: Arc<AtomicBool>,
@@ -228,6 +229,21 @@ impl Internal {
 /// A multimedia video loaded from a URI (e.g., a local file path or HTTP stream).
 #[derive(Debug)]
 pub struct Video(pub(crate) RwLock<Internal>);
+
+/// Information about one embedded subtitle (text) stream in the media file.
+#[derive(Debug, Clone)]
+pub struct SubtitleStreamInfo {
+    /// Index of this stream among the file's subtitle streams (ffmpeg `0:s:N`).
+    pub index: i32,
+    /// Whether the stream's language tag is English.
+    pub english: bool,
+    /// Whether the stream is a text-based format (SRT/ASS/VTT...).
+    pub is_text: bool,
+    /// Whether the stream is a PGS (Blu-ray bitmap) format.
+    pub is_pgs: bool,
+    /// The stream's language code, if tagged.
+    pub language: Option<String>,
+}
 
 impl Drop for Video {
     fn drop(&mut self) {

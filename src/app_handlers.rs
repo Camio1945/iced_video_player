@@ -1,7 +1,6 @@
 use crate::app_state::{App, Message, VideoState};
 use crate::text_utils;
 use iced::Task;
-use iced::keyboard::{self, Key, key};
 use std::time::Duration;
 
 impl App {
@@ -237,10 +236,9 @@ impl App {
                 let url = url::Url::from_file_path(std::path::Path::new(ps)).unwrap();
                 match iced_video_player::Video::new(&url) {
                     Ok(v) => {
-                        let has_builtin = v.has_builtin_subtitles();
                         self.video = VideoState::Ready(v);
                         self.position = 0.0;
-                        self.apply_subtitle_auto(ps, has_builtin);
+                        return self.apply_subtitle_auto(ps);
                     }
                     Err(e) => {
                         self.video = VideoState::NoVideo;
@@ -256,33 +254,68 @@ impl App {
         Task::none()
     }
 
-    fn apply_subtitle_auto(&mut self, video_path: &str, has_builtin: bool) {
-        // 1) Explicit subtitle from CLI takes priority
+    /// Subtitle selection priority:
+    /// 1) explicit CLI `--subtitle`, 2) external English subtitle file,
+    /// 3) extract the embedded English stream to an external SRT (async).
+    fn apply_subtitle_auto(&mut self, video_path: &str) -> Task<Message> {
         if let Some(sp) = self.pending_subtitle.take() {
-            if let Ok(sub_url) = url::Url::from_file_path(&sp) {
-                if let VideoState::Ready(ref mut vv) = self.video {
-                    if let Err(e) = vv.set_subtitle_url(&sub_url) {
-                        eprintln!("Subtitle error: {}", e);
-                    }
-                }
-            }
-            return;
+            self.load_subtitle_file(&sp);
+            return Task::none();
         }
 
-        // 2) If no built-in English subtitles, auto-discover external files
-        if !has_builtin {
-            if let Some(sub_path) =
-                crate::subtitle_discovery::find_english_subtitle_file(video_path)
-            {
-                if let Ok(sub_url) = url::Url::from_file_path(&sub_path) {
-                    if let VideoState::Ready(ref mut vv) = self.video {
-                        if let Err(e) = vv.set_subtitle_url(&sub_url) {
-                            eprintln!("Subtitle error: {}", e);
-                        }
-                    }
-                }
-            }
+        if let Some(sub_path) = crate::subtitle_discovery::find_english_subtitle_file(video_path) {
+            self.load_subtitle_file(&sub_path);
+            return Task::none();
         }
+
+        self.extract_embedded_english(video_path)
+    }
+
+    fn load_subtitle_file(&mut self, path: &std::path::Path) {
+        if let Ok(sub_url) = url::Url::from_file_path(path)
+            && let VideoState::Ready(ref mut vv) = self.video
+            && let Err(e) = vv.set_subtitle_url(&sub_url)
+        {
+            eprintln!("Subtitle error: {}", e);
+        }
+    }
+
+    fn extract_embedded_english(&mut self, video_path: &str) -> Task<Message> {
+        let Some(english) = self.english_embedded_stream() else {
+            return Task::none();
+        };
+        let (index, is_pgs) = (english.index, english.is_pgs);
+        let path = video_path.to_string();
+        Task::perform(
+            async move { crate::subtitle_extract::extract_embedded_subtitle(&path, index, is_pgs) },
+            Message::SubtitleExtracted,
+        )
+    }
+
+    fn english_embedded_stream(&self) -> Option<iced_video_player::SubtitleStreamInfo> {
+        let VideoState::Ready(ref v) = self.video else {
+            return None;
+        };
+        let streams = v.subtitle_streams();
+        streams
+            .iter()
+            .find(|s| s.english && s.is_text)
+            .or_else(|| streams.iter().find(|s| s.english && s.is_pgs))
+            .cloned()
+    }
+
+    pub fn handle_subtitle_extracted(
+        &mut self,
+        result: Result<std::path::PathBuf, String>,
+    ) -> Task<Message> {
+        match result {
+            Ok(path) => {
+                eprintln!("Subtitle extracted: {}", path.display());
+                self.load_subtitle_file(&path);
+            }
+            Err(e) => eprintln!("Subtitle extraction failed: {}", e),
+        }
+        Task::none()
     }
 
     pub fn handle_load_subtitle(&mut self) -> Task<Message> {
@@ -315,55 +348,4 @@ impl App {
         Task::none()
     }
 
-    pub fn handle_keyboard_event(&mut self, event: keyboard::Event) -> Task<Message> {
-        match event {
-            keyboard::Event::KeyPressed { key, .. } => match &key {
-                Key::Named(key::Named::Space) => self.handle_toggle_pause(),
-                Key::Named(key::Named::ArrowLeft) => self.handle_skip_back(5),
-                Key::Named(key::Named::ArrowRight) => self.handle_skip_forward(5),
-                Key::Named(key::Named::ArrowUp) => {
-                    let v = (self.volume + 0.05).min(2.0);
-                    self.handle_set_volume(v)
-                }
-                Key::Named(key::Named::ArrowDown) => {
-                    let v = (self.volume - 0.05).max(0.0);
-                    self.handle_set_volume(v)
-                }
-                Key::Character(c) => self.handle_character_key(c.as_str()),
-                Key::Named(key::Named::Escape) => {
-                    if self.fullscreen {
-                        self.handle_toggle_fullscreen()
-                    } else if !self.dict_word.is_empty() {
-                        self.handle_close_dictionary()
-                    } else {
-                        Task::none()
-                    }
-                }
-                _ => Task::none(),
-            },
-            _ => Task::none(),
-        }
-    }
-
-    fn handle_character_key(&mut self, c: &str) -> Task<Message> {
-        match c {
-            "f" | "F" => self.handle_toggle_fullscreen(),
-            "m" | "M" => self.handle_toggle_mute(),
-            "l" | "L" => self.handle_toggle_loop(),
-            "[" => {
-                let s = (self.speed - 0.25).max(0.25);
-                self.handle_set_speed(s)
-            }
-            "]" => {
-                let s = (self.speed + 0.25).min(4.0);
-                self.handle_set_speed(s)
-            }
-            "," => self.handle_frame_step_backward(),
-            "." => self.handle_frame_step_forward(),
-            "o" | "O" => self.handle_open_file(),
-            "s" | "S" => self.handle_load_subtitle(),
-            "c" | "C" => self.handle_cycle_content_fit(),
-            _ => Task::none(),
-        }
-    }
 }

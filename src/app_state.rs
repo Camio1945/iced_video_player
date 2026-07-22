@@ -22,6 +22,7 @@ pub enum Message {
     SubtitlePicked(Option<std::path::PathBuf>),
     SubtitleText(String),
     SubtitleImage(Option<iced_video_player::pgs::PgsImage>),
+    SubtitleExtracted(Result<std::path::PathBuf, String>),
     SearchWord(String),
     DictionaryResult(DictResult),
     CloseDictionary,

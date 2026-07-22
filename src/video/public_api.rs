@@ -192,6 +192,11 @@ impl Video {
         self.read().builtin_text_subtitle
     }
 
+    /// Get information about all embedded subtitle streams in the media file.
+    pub fn subtitle_streams(&self) -> Vec<crate::SubtitleStreamInfo> {
+        self.read().subtitle_streams.clone()
+    }
+
     /// Get the underlying GStreamer pipeline.
     pub fn pipeline(&self) -> gst::Pipeline {
         self.read().source.clone()
