@@ -1,21 +1,19 @@
+use crate::app_state::{App, Message, SidebarTab};
 use crate::dict::DictSection;
+use crate::settings::AppSettings;
 use iced::{
     Color, Element, Length,
-    alignment::Vertical,
+    alignment::{Horizontal, Vertical},
     widget::{Button, Column, Container, Row, Scrollable, Space, Text},
 };
 
-use crate::app_state::{App, Message};
-
 pub(crate) fn build_dictionary_sidebar(app: &App) -> Element<'_, Message> {
-    let header = build_dict_header(app);
+    let tabs = build_tab_bar(app.active_tab);
 
-    let body: Element<'_, Message> = if app.dict_loading {
-        build_dict_loading_placeholder()
-    } else if app.dict_word.is_empty() {
-        build_dict_empty_placeholder()
-    } else {
-        build_dictionary_body(app)
+    let body: Element<'_, Message> = match app.active_tab {
+        SidebarTab::Dictionary => build_dictionary_content(app),
+        SidebarTab::Settings => build_settings_content(app),
+        SidebarTab::Playlist => build_playlist_content(),
     };
 
     let body_container = Container::new(
@@ -32,13 +30,69 @@ pub(crate) fn build_dictionary_sidebar(app: &App) -> Element<'_, Message> {
         Column::new()
             .width(Length::Fill)
             .height(Length::Fill)
-            .push(header)
+            .push(tabs)
             .push(body_container),
     )
     .width(Length::Fixed(360.0))
     .height(Length::Fill)
     .style(crate::styles::sidebar)
     .into()
+}
+
+fn build_tab_bar(active: SidebarTab) -> Container<'static, Message> {
+    Container::new(
+        Row::new()
+            .width(Length::Fill)
+            .spacing(0)
+            .push(build_tab_btn("Dictionary", SidebarTab::Dictionary, active))
+            .push(build_tab_btn("Settings", SidebarTab::Settings, active))
+            .push(build_tab_btn("Playlist", SidebarTab::Playlist, active)),
+    )
+    .width(Length::Fill)
+    .style(crate::styles::sidebar_header)
+}
+
+fn build_tab_btn(
+    label: &'static str,
+    tab: SidebarTab,
+    active: SidebarTab,
+) -> Button<'static, Message> {
+    let is_active = tab == active;
+    let style = if is_active {
+        crate::styles::active_tab_btn
+    } else {
+        crate::styles::tab_btn
+    };
+    Button::new(
+        Text::new(label)
+            .size(12)
+            .align_x(Horizontal::Center),
+    )
+    .padding([10, 4])
+    .width(Length::Fill)
+    .on_press(Message::SwitchSidebarTab(tab))
+    .style(style)
+}
+
+// ── Dictionary tab ────────────────────────────────────────────────────────
+
+fn build_dictionary_content(app: &App) -> Element<'_, Message> {
+    let header = build_dict_header(app);
+
+    let body: Element<'_, Message> = if app.dict_loading {
+        build_dict_loading_placeholder()
+    } else if app.dict_word.is_empty() {
+        build_dict_empty_placeholder()
+    } else {
+        build_dictionary_body(app)
+    };
+
+    Column::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .push(header)
+        .push(body)
+        .into()
 }
 
 fn build_dict_header(app: &App) -> Container<'static, Message> {
@@ -72,7 +126,7 @@ fn build_dict_loading_placeholder<'a>() -> Element<'a, Message> {
     Container::new(
         Column::new()
             .spacing(6)
-            .align_x(iced::alignment::Horizontal::Center)
+            .align_x(Horizontal::Center)
             .padding([24, 12])
             .push(Text::new("\u{23F3}").size(22))
             .push(Text::new("Looking up...").size(12)),
@@ -86,7 +140,7 @@ fn build_dict_empty_placeholder<'a>() -> Element<'a, Message> {
         Column::new()
             .spacing(8)
             .padding([24, 14])
-            .align_x(iced::alignment::Horizontal::Center)
+            .align_x(Horizontal::Center)
             .push(
                 Text::new("\u{1F448}")
                     .size(28)
@@ -210,4 +264,149 @@ fn build_dict_examples_section<'a>(examples: &[String]) -> Column<'a, Message> {
         );
     }
     ex_col
+}
+
+// ── Settings tab ──────────────────────────────────────────────────────────
+
+fn build_settings_content(app: &App) -> Element<'_, Message> {
+    Column::new()
+        .width(Length::Fill)
+        .spacing(16)
+        .padding([20, 16])
+        .push(build_settings_title())
+        .push(build_subtitle_font_size_section(&app.settings))
+        .push(build_settings_note())
+        .into()
+}
+
+fn build_settings_title<'a>() -> Text<'a> {
+    Text::new("Settings")
+        .size(16)
+        .color(Color::from_rgb(0.95, 0.95, 0.98))
+}
+
+fn build_settings_note<'a>() -> Text<'a> {
+    Text::new("Settings are saved automatically.")
+        .size(11)
+        .color(Color::from_rgb(0.6, 0.6, 0.65))
+}
+
+fn build_subtitle_font_size_section(settings: &AppSettings) -> Container<'static, Message> {
+    let size = settings.subtitle_font_size;
+    let can_increase = size < AppSettings::MAX_FONT_SIZE;
+    let can_decrease = size > AppSettings::MIN_FONT_SIZE;
+
+    Container::new(
+        Column::new()
+            .width(Length::Fill)
+            .spacing(10)
+            .push(
+                Text::new("Subtitle Font Size")
+                    .size(13)
+                    .color(Color::from_rgb(0.85, 0.85, 0.9)),
+            )
+            .push(build_font_size_row(size, can_increase, can_decrease))
+            .push(
+                Text::new(format!(
+                    "Range: {} – {} px",
+                    AppSettings::MIN_FONT_SIZE as i32,
+                    AppSettings::MAX_FONT_SIZE as i32
+                ))
+                .size(10)
+                .color(Color::from_rgb(0.55, 0.55, 0.6)),
+            ),
+    )
+    .width(Length::Fill)
+    .padding([12, 12])
+    .style(crate::styles::dict_section_card)
+}
+
+const FONT_SIZE_BTN_HEIGHT: f32 = 36.0;
+const FONT_SIZE_BTN_WIDTH: f32 = 40.0;
+const FONT_SIZE_LABEL_WIDTH: f32 = 80.0;
+
+fn build_font_size_row(
+    size: f32,
+    can_increase: bool,
+    can_decrease: bool,
+) -> Row<'static, Message> {
+    let mut minus_btn = Button::new(
+        Text::new("\u{2212}") // − minus sign
+            .size(18)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .width(Length::Fixed(FONT_SIZE_BTN_WIDTH))
+    .height(Length::Fixed(FONT_SIZE_BTN_HEIGHT))
+    .style(crate::styles::ctrl_btn);
+    if can_decrease {
+        minus_btn = minus_btn.on_press(Message::DecreaseSubtitleFont);
+    }
+
+    let mut plus_btn = Button::new(
+        Text::new("+")
+            .size(18)
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .width(Length::Fixed(FONT_SIZE_BTN_WIDTH))
+    .height(Length::Fixed(FONT_SIZE_BTN_HEIGHT))
+    .style(crate::styles::ctrl_btn);
+    if can_increase {
+        plus_btn = plus_btn.on_press(Message::IncreaseSubtitleFont);
+    }
+
+    let size_label: Element<'_, Message> = Container::new(
+        Text::new(format!("{} px", size as i32))
+            .size(16)
+            .color(Color::from_rgb(0.95, 0.95, 1.0))
+            .align_x(Horizontal::Center)
+            .align_y(Vertical::Center)
+            .width(Length::Fill)
+            .height(Length::Fill),
+    )
+    .width(Length::Fixed(FONT_SIZE_LABEL_WIDTH))
+    .height(Length::Fixed(FONT_SIZE_BTN_HEIGHT))
+    .into();
+
+    Row::new()
+        .spacing(10)
+        .align_y(Vertical::Center)
+        .height(Length::Fixed(FONT_SIZE_BTN_HEIGHT))
+        .push(minus_btn)
+        .push(size_label)
+        .push(plus_btn)
+        .push(Space::new().width(Length::Fill))
+}
+
+// ── Playlist tab ──────────────────────────────────────────────────────────
+
+fn build_playlist_content<'a>() -> Element<'a, Message> {
+    Container::new(
+        Column::new()
+            .spacing(8)
+            .padding([24, 14])
+            .align_x(Horizontal::Center)
+            .push(
+                Text::new("\u{1F3B5}")
+                    .size(28)
+                    .color(Color::from_rgb(0.7, 0.7, 0.75)),
+            )
+            .push(
+                Text::new("Playlist")
+                    .size(14)
+                    .color(Color::from_rgb(0.85, 0.85, 0.9)),
+            )
+            .push(
+                Text::new("Coming soon...")
+                    .size(11)
+                    .color(Color::from_rgb(0.6, 0.6, 0.65)),
+            ),
+    )
+    .width(Length::Fill)
+    .into()
 }

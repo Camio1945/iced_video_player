@@ -1,6 +1,14 @@
 use iced_video_player::Video;
 
 use crate::dict::{DictResult, DictSection};
+use crate::settings::AppSettings;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SidebarTab {
+    Dictionary,
+    Settings,
+    Playlist,
+}
 
 #[derive(Debug, Clone)]
 pub enum Message {
@@ -34,6 +42,9 @@ pub enum Message {
     CycleContentFit,
     KeyboardEvent(iced::keyboard::Event),
     WindowOpened(iced::window::Id),
+    SwitchSidebarTab(SidebarTab),
+    IncreaseSubtitleFont,
+    DecreaseSubtitleFont,
 }
 
 pub enum VideoState {
@@ -64,6 +75,8 @@ pub struct App {
     pub current_file_path: Option<String>,
     pub window_id: Option<iced::window::Id>,
     pub pending_subtitle: Option<std::path::PathBuf>,
+    pub active_tab: SidebarTab,
+    pub settings: AppSettings,
 }
 
 impl Default for App {
@@ -90,6 +103,8 @@ impl Default for App {
             current_file_path: None,
             window_id: None,
             pending_subtitle: None,
+            active_tab: SidebarTab::Dictionary,
+            settings: crate::settings::load(),
         }
     }
 }

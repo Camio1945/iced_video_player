@@ -1,4 +1,4 @@
-use crate::app_state::{App, Message, VideoState};
+use crate::app_state::{App, Message, SidebarTab, VideoState};
 use crate::text_utils;
 use iced::Task;
 use image::RgbaImage;
@@ -201,6 +201,23 @@ impl App {
 
     pub fn handle_window_opened(&mut self, id: iced::window::Id) -> Task<Message> {
         self.window_id = Some(id);
+        Task::none()
+    }
+
+    pub fn handle_switch_sidebar_tab(&mut self, tab: SidebarTab) -> Task<Message> {
+        self.active_tab = tab;
+        Task::none()
+    }
+
+    pub fn handle_increase_subtitle_font(&mut self) -> Task<Message> {
+        self.settings.increase_font();
+        crate::settings::save(&self.settings);
+        Task::none()
+    }
+
+    pub fn handle_decrease_subtitle_font(&mut self) -> Task<Message> {
+        self.settings.decrease_font();
+        crate::settings::save(&self.settings);
         Task::none()
     }
 

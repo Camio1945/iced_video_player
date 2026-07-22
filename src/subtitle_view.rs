@@ -7,11 +7,13 @@ use iced::{
 
 use crate::app_state::Message;
 
-const SUBTITLE_FONT_SIZE: f32 = 20.0;
 const MAX_CHARS_PER_LINE: usize = 80;
 const LINE_SPACING: f32 = 2.0;
 
-pub(crate) fn build_subtitle_with_clickable_words(text: &str) -> Element<'_, Message> {
+pub(crate) fn build_subtitle_with_clickable_words(
+    text: &str,
+    font_size: f32,
+) -> Element<'_, Message> {
     let mut column = Column::new()
         .spacing(LINE_SPACING)
         .align_x(Horizontal::Center)
@@ -29,7 +31,7 @@ pub(crate) fn build_subtitle_with_clickable_words(text: &str) -> Element<'_, Mes
         for wrapped_line in wrap_into_lines(&tokens, MAX_CHARS_PER_LINE) {
             let mut row = Row::new().spacing(0);
             for token in wrapped_line {
-                row = row.push(build_token(token));
+                row = row.push(build_token(token, font_size));
             }
             column = column.push(row);
         }
@@ -115,7 +117,7 @@ fn wrap_into_lines(tokens: &[Token], max_chars: usize) -> Vec<Vec<Token>> {
     lines
 }
 
-fn build_token(token: Token) -> Element<'static, Message> {
+fn build_token(token: Token, font_size: f32) -> Element<'static, Message> {
     match token {
         Token::Word(w) => {
             let (trimmed, trailing) = split_word_token(&w);
@@ -123,13 +125,13 @@ fn build_token(token: Token) -> Element<'static, Message> {
             // Every word is clickable, including short ones ("it", "me", "go"),
             // words with apostrophes ("It's", "Don't"), and common words
             // ("the"). The user expects to be able to look up any word.
-            row = row.push(make_clickable_word(trimmed.to_string()));
+            row = row.push(make_clickable_word(trimmed.to_string(), font_size));
             if !trailing.is_empty() {
-                row = row.push(make_plain_text(trailing));
+                row = row.push(make_plain_text(trailing, font_size));
             }
             row.into()
         }
-        Token::Punct(p) => make_plain_text(p).into(),
+        Token::Punct(p) => make_plain_text(p, font_size).into(),
     }
 }
 
@@ -141,15 +143,16 @@ fn split_word_token(word: &str) -> (&str, String) {
     (trimmed, trailing)
 }
 
-fn make_plain_text(content: String) -> Text<'static, iced::Theme, iced::Renderer> {
-    Text::new(content)
-        .size(SUBTITLE_FONT_SIZE)
-        .color(Color::WHITE)
+fn make_plain_text(content: String, size: f32) -> Text<'static, iced::Theme, iced::Renderer> {
+    Text::new(content).size(size).color(Color::WHITE)
 }
 
-fn make_clickable_word(word: String) -> MouseArea<'static, Message, iced::Theme, iced::Renderer> {
+fn make_clickable_word(
+    word: String,
+    size: f32,
+) -> MouseArea<'static, Message, iced::Theme, iced::Renderer> {
     let lower = word.to_lowercase();
-    MouseArea::new(make_plain_text(word))
+    MouseArea::new(make_plain_text(word, size))
         .on_press(Message::SearchWord(lower))
         .interaction(mouse::Interaction::Pointer)
 }

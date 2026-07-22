@@ -7,6 +7,7 @@ mod boot;
 mod dict;
 mod dict_view;
 mod icons;
+mod settings;
 mod styles;
 mod subtitle_discovery;
 mod subtitle_extract;
@@ -62,6 +63,9 @@ fn update(app: &mut App, message: Message) -> Task<Message> {
         Message::CycleContentFit => app.handle_cycle_content_fit(),
         Message::WindowOpened(id) => app.handle_window_opened(id),
         Message::KeyboardEvent(e) => app.handle_keyboard_event(e),
+        Message::SwitchSidebarTab(t) => app.handle_switch_sidebar_tab(t),
+        Message::IncreaseSubtitleFont => app.handle_increase_subtitle_font(),
+        Message::DecreaseSubtitleFont => app.handle_decrease_subtitle_font(),
     }
 }
 
@@ -131,7 +135,10 @@ fn build_player_area(app: &App) -> Element<'_, Message> {
         stack = stack.push(build_image_subtitle_layer(handle));
     }
     if has_text_sub {
-        stack = stack.push(build_text_subtitle_layer(&app.subtitle_text));
+        stack = stack.push(build_text_subtitle_layer(
+            &app.subtitle_text,
+            app.settings.subtitle_font_size,
+        ));
     }
     stack.into()
 }
@@ -148,8 +155,8 @@ fn build_image_subtitle_layer(handle: &iced::widget::image::Handle) -> Container
         })
 }
 
-fn build_text_subtitle_layer(text: &str) -> Container<'_, Message> {
-    Container::new(subtitle_view::build_subtitle_with_clickable_words(text))
+fn build_text_subtitle_layer(text: &str, font_size: f32) -> Container<'_, Message> {
+    Container::new(subtitle_view::build_subtitle_with_clickable_words(text, font_size))
         .width(Length::Fill)
         .align_bottom(Length::Fill)
         .padding([0, 48])

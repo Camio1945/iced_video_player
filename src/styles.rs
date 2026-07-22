@@ -96,3 +96,31 @@ pub fn dict_section_card(_: &Theme) -> container::Style {
         ..Default::default()
     }
 }
+
+pub fn tab_btn(_: &Theme, status: button::Status) -> button::Style {
+    let bg = match status {
+        button::Status::Hovered => Color::from_rgb(0.22, 0.22, 0.3),
+        button::Status::Pressed => Color::from_rgb(0.2, 0.2, 0.27),
+        _ => Color::from_rgb(0.16, 0.16, 0.22),
+    };
+    button::Style {
+        background: Some(iced::Background::Color(bg)),
+        text_color: Color::from_rgb(0.72, 0.72, 0.78),
+        border: border::rounded(0),
+        ..Default::default()
+    }
+}
+
+pub fn active_tab_btn(_: &Theme, status: button::Status) -> button::Style {
+    let bg = match status {
+        button::Status::Hovered => Color::from_rgb(0.32, 0.32, 0.42),
+        button::Status::Pressed => Color::from_rgb(0.28, 0.28, 0.38),
+        _ => Color::from_rgb(0.26, 0.26, 0.36),
+    };
+    button::Style {
+        background: Some(iced::Background::Color(bg)),
+        text_color: Color::WHITE,
+        border: border::rounded(0),
+        ..Default::default()
+    }
+}
