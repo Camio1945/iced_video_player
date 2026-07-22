@@ -1,8 +1,20 @@
-use crate::app_state::{App, Message, SidebarTab, VideoState};
+use crate::app_state::{App, Message, VideoState};
 use crate::text_utils;
 use iced::Task;
 use image::RgbaImage;
 use std::time::Duration;
+
+/// Build a `file://` URL from a path, falling back gracefully instead of
+/// panicking when the path cannot be expressed as a valid URL.
+fn file_url_from_path(path: &std::path::Path) -> url::Url {
+    url::Url::from_file_path(path).unwrap_or_else(|_| {
+        let raw = path.display().to_string();
+        url::Url::parse(&format!("file:///{}", raw)).unwrap_or_else(|e| {
+            eprintln!("invalid file URL '{}': {}", raw, e);
+            url::Url::parse("file:///").unwrap()
+        })
+    })
+}
 
 impl App {
     pub fn handle_toggle_pause(&mut self) -> Task<Message> {
@@ -95,8 +107,18 @@ impl App {
             }
             let ratio = target_w as f32 / i.width as f32;
             let target_h = (i.height as f32 * ratio) as u32;
-            let src =
-                RgbaImage::from_raw(i.width, i.height, i.rgba).expect("PGS RGBA size mismatch");
+            let src = match RgbaImage::from_raw(i.width, i.height, i.rgba) {
+                Some(img) => img,
+                None => {
+                    eprintln!(
+                        "PGS RGBA size mismatch: {}x{} with {} bytes",
+                        i.width,
+                        i.height,
+                        ((i.width as usize) * (i.height as usize) * 4)
+                    );
+                    return iced::widget::image::Handle::from_rgba(1, 1, vec![0u8, 0, 0, 0]);
+                }
+            };
             let scaled = image::imageops::resize(
                 &src,
                 target_w.max(1),
@@ -204,23 +226,6 @@ impl App {
         Task::none()
     }
 
-    pub fn handle_switch_sidebar_tab(&mut self, tab: SidebarTab) -> Task<Message> {
-        self.active_tab = tab;
-        Task::none()
-    }
-
-    pub fn handle_increase_subtitle_font(&mut self) -> Task<Message> {
-        self.settings.increase_font();
-        crate::settings::save(&self.settings);
-        Task::none()
-    }
-
-    pub fn handle_decrease_subtitle_font(&mut self) -> Task<Message> {
-        self.settings.decrease_font();
-        crate::settings::save(&self.settings);
-        Task::none()
-    }
-
     pub fn handle_open_file(&mut self) -> Task<Message> {
         // Use AsyncFileDialog so the dialog runs on a dedicated thread with
         // proper COM apartment initialization. Calling the synchronous
@@ -256,8 +261,7 @@ impl App {
             self.subtitle_image = None;
             self.clear_dictionary();
             self.pending_subtitle = None;
-            let url = url::Url::from_file_path(&path)
-                .unwrap_or_else(|_| url::Url::parse(&format!("file:///{}", ps)).unwrap());
+            let url = file_url_from_path(&path);
             Task::perform(
                 async move {
                     match iced_video_player::Video::new(&url) {
@@ -275,12 +279,13 @@ impl App {
     pub fn handle_file_opened(&mut self, result: Result<String, String>) -> Task<Message> {
         match result {
             Ok(ref ps) => {
-                let url = url::Url::from_file_path(std::path::Path::new(ps))
-                    .unwrap_or_else(|_| url::Url::parse(&format!("file:///{}", ps)).unwrap());
+                let url = file_url_from_path(std::path::Path::new(ps));
                 match iced_video_player::Video::new(&url) {
                     Ok(v) => {
                         self.video = VideoState::Ready(v);
                         self.position = 0.0;
+                        self.settings.add_recent_file(ps);
+                        crate::settings::save(&self.settings);
                         return self.apply_subtitle_auto(ps);
                     }
                     Err(e) => {
@@ -383,9 +388,7 @@ impl App {
 
     pub fn handle_subtitle_picked(&mut self, path: Option<std::path::PathBuf>) -> Task<Message> {
         if let Some(path) = path {
-            let ps = path.display().to_string();
-            let url = url::Url::from_file_path(&path)
-                .unwrap_or_else(|_| url::Url::parse(&format!("file:///{}", ps)).unwrap());
+            let url = file_url_from_path(&path);
             if let Some(Err(e)) = self.with_video_mut(|v| v.set_subtitle_url(&url)) {
                 eprintln!("Failed to load subtitle: {}", e);
             }

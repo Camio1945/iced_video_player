@@ -124,3 +124,33 @@ pub fn active_tab_btn(_: &Theme, status: button::Status) -> button::Style {
         ..Default::default()
     }
 }
+
+/// Transparent button used for clickable history file-name links.
+pub fn text_link_btn(_: &Theme, status: button::Status) -> button::Style {
+    let text_color = match status {
+        button::Status::Hovered => Color::from_rgb(0.55, 0.72, 1.0),
+        button::Status::Pressed => Color::from_rgb(0.45, 0.62, 0.9),
+        _ => Color::from_rgb(0.75, 0.78, 0.85),
+    };
+    button::Style {
+        background: None,
+        text_color,
+        border: border::rounded(0),
+        ..Default::default()
+    }
+}
+
+/// Small button for destructive actions (remove history item, clear all).
+pub fn danger_btn(_: &Theme, status: button::Status) -> button::Style {
+    let bg = match status {
+        button::Status::Hovered => Color::from_rgb(0.6, 0.2, 0.2),
+        button::Status::Pressed => Color::from_rgb(0.5, 0.15, 0.15),
+        _ => Color::from_rgb(0.25, 0.15, 0.15),
+    };
+    button::Style {
+        background: Some(iced::Background::Color(bg)),
+        text_color: Color::from_rgb(0.9, 0.55, 0.55),
+        border: border::rounded(4),
+        ..Default::default()
+    }
+}

@@ -1,11 +1,14 @@
 #![windows_subsystem = "windows"]
 
+mod app_dispatch;
 mod app_handlers;
+mod app_handlers_settings;
 mod app_keyboard;
 mod app_state;
 mod boot;
 mod dict;
 mod dict_view;
+mod dict_view_settings;
 mod icons;
 mod settings;
 mod styles;
@@ -30,43 +33,7 @@ use iced_video_player::{Video, VideoPlayer};
 
 // ── update ────────────────────────────────────────────────────────────────
 fn update(app: &mut App, message: Message) -> Task<Message> {
-    match message {
-        Message::TogglePause => app.handle_toggle_pause(),
-        Message::Seek(s) => app.handle_seek(s),
-        Message::SeekRelease => app.handle_seek_release(),
-        Message::SkipBack(s) => app.handle_skip_back(s),
-        Message::SkipForward(s) => app.handle_skip_forward(s),
-        Message::FrameStepForward => app.handle_frame_step_forward(),
-        Message::FrameStepBackward => app.handle_frame_step_backward(),
-        Message::EndOfStream => Task::none(),
-        Message::NewFrame => app.handle_new_frame(),
-        Message::PlaybackError(err) => {
-            eprintln!("Playback error: {}", err);
-            Task::none()
-        }
-        Message::OpenFile => app.handle_open_file(),
-        Message::FilePicked(p) => app.handle_file_picked(p),
-        Message::FileOpened(r) => app.handle_file_opened(r),
-        Message::LoadSubtitle => app.handle_load_subtitle(),
-        Message::SubtitlePicked(p) => app.handle_subtitle_picked(p),
-        Message::SubtitleText(t) => app.handle_subtitle_text(t),
-        Message::SubtitleImage(i) => app.handle_subtitle_image(i),
-        Message::SubtitleExtracted(r) => app.handle_subtitle_extracted(r),
-        Message::SearchWord(w) => app.handle_search_word(w),
-        Message::DictionaryResult(r) => app.handle_dictionary_result(r),
-        Message::CloseDictionary => app.handle_close_dictionary(),
-        Message::ToggleLoop => app.handle_toggle_loop(),
-        Message::ToggleMute => app.handle_toggle_mute(),
-        Message::SetVolume(v) => app.handle_set_volume(v),
-        Message::SetSpeed(s) => app.handle_set_speed(s),
-        Message::ToggleFullscreen => app.handle_toggle_fullscreen(),
-        Message::CycleContentFit => app.handle_cycle_content_fit(),
-        Message::WindowOpened(id) => app.handle_window_opened(id),
-        Message::KeyboardEvent(e) => app.handle_keyboard_event(e),
-        Message::SwitchSidebarTab(t) => app.handle_switch_sidebar_tab(t),
-        Message::IncreaseSubtitleFont => app.handle_increase_subtitle_font(),
-        Message::DecreaseSubtitleFont => app.handle_decrease_subtitle_font(),
-    }
+    App::dispatch(app, message)
 }
 
 // ── view ──────────────────────────────────────────────────────────────────
@@ -105,7 +72,11 @@ fn view(app: &App) -> Element<'_, Message> {
         .into()
 }
 
-fn build_player_column<'a>(app: &'a App, is_paused: bool, is_looping: bool) -> Element<'a, Message> {
+fn build_player_column<'a>(
+    app: &'a App,
+    is_paused: bool,
+    is_looping: bool,
+) -> Element<'a, Message> {
     let bottom_panel = Column::new()
         .width(Length::Fill)
         .push(build_seek_bar(app.position, app.video_duration()))
@@ -156,10 +127,12 @@ fn build_image_subtitle_layer(handle: &iced::widget::image::Handle) -> Container
 }
 
 fn build_text_subtitle_layer(text: &str, font_size: f32) -> Container<'_, Message> {
-    Container::new(subtitle_view::build_subtitle_with_clickable_words(text, font_size))
-        .width(Length::Fill)
-        .align_bottom(Length::Fill)
-        .padding([0, 48])
+    Container::new(subtitle_view::build_subtitle_with_clickable_words(
+        text, font_size,
+    ))
+    .width(Length::Fill)
+    .align_bottom(Length::Fill)
+    .padding([0, 48])
 }
 
 fn build_toolbar<'a>(has_video: bool, position: f64, duration: f64) -> Row<'a, Message> {

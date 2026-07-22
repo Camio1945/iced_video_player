@@ -45,6 +45,12 @@ pub enum Message {
     SwitchSidebarTab(SidebarTab),
     IncreaseSubtitleFont,
     DecreaseSubtitleFont,
+    ToggleHistory,
+    IncreaseHistoryMaxItems,
+    DecreaseHistoryMaxItems,
+    ClearHistory,
+    RemoveHistoryItem(String),
+    OpenHistoryItem(String),
 }
 
 pub enum VideoState {

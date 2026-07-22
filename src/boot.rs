@@ -22,6 +22,20 @@ pub fn parse_cli_args(args: &[String]) -> (Option<String>, Option<String>) {
     }
 }
 
+/// Build a `file://` URL from a CLI argument string, emitting a warning
+/// and falling back to `file:///` when the path is not a valid URL.
+fn url_from_cli_path(path: &str) -> url::Url {
+    url::Url::from_file_path(path).unwrap_or_else(|_| {
+        url::Url::parse(&format!("file:///{}", path)).unwrap_or_else(|e| {
+            eprintln!(
+                "failed to construct file URL from CLI argument '{}': {}",
+                path, e
+            );
+            url::Url::parse("file:///").unwrap()
+        })
+    })
+}
+
 pub fn create_boot_closure(
     video_arg: Option<String>,
     subtitle_arg: Option<String>,
@@ -40,10 +54,7 @@ pub fn create_boot_closure(
                 app.pending_subtitle = Some(sub_path);
             }
 
-            let url = url::Url::from_file_path(path).unwrap_or_else(|_| {
-                url::Url::parse(&format!("file:///{}", path))
-                    .expect("failed to construct file URL from CLI argument")
-            });
+            let url = url_from_cli_path(path);
             let path_owned = path.clone();
             initial_task = Task::perform(
                 async move {
