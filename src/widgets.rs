@@ -1,71 +1,70 @@
-use iced::widget::{Button, Text};
+use iced::Length;
+use iced::widget::{Button, Svg, Text};
 
 use crate::app_state::Message;
+use crate::icons;
 use crate::styles;
 
-pub(crate) fn skip_back_10_btn<'a>(has_video: bool) -> Button<'a, Message> {
-    Button::new(Text::new("\u{23EA}").size(14))
-        .padding([4, 6])
-        .on_press_maybe(if has_video {
-            Some(Message::SkipBack(10))
-        } else {
-            None
-        })
+/// Height of every icon SVG and its enclosing button, ensuring
+/// the visual center of each icon lands on the same horizontal line.
+const ICON_SIZE: f32 = 22.0;
+const BTN_HEIGHT: f32 = 30.0;
+const BTN_HORIZ_PAD: u16 = 6;
+
+/// Small helper: SVG icon sized to ICON_SIZE, wrapped in a button
+/// with fixed height and horizontal-only padding.
+fn icon_btn(icon_data: &[u8]) -> Svg<'_> {
+    Svg::new(icons::svg_handle(icon_data))
+        .width(Length::Fixed(ICON_SIZE))
+        .height(Length::Fixed(ICON_SIZE))
+}
+
+pub(crate) fn skip_back_10_btn() -> Button<'static, Message> {
+    Button::new(icon_btn(icons::SKIP_BACK_10))
+        .padding([0, BTN_HORIZ_PAD])
+        .height(Length::Fixed(BTN_HEIGHT))
+        .on_press(Message::SkipBack(10))
         .style(styles::ctrl_btn)
 }
 
-pub(crate) fn skip_back_5_btn<'a>(has_video: bool) -> Button<'a, Message> {
-    Button::new(Text::new("\u{23F4}").size(14))
-        .padding([4, 6])
-        .on_press_maybe(if has_video {
-            Some(Message::SkipBack(5))
-        } else {
-            None
-        })
+pub(crate) fn skip_back_5_btn() -> Button<'static, Message> {
+    Button::new(icon_btn(icons::SKIP_BACK_5))
+        .padding([0, BTN_HORIZ_PAD])
+        .height(Length::Fixed(BTN_HEIGHT))
+        .on_press(Message::SkipBack(5))
         .style(styles::ctrl_btn)
 }
 
-pub(crate) fn pause_play_btn<'a>(has_video: bool, is_paused: bool) -> Button<'a, Message> {
-    Button::new(Text::new(if is_paused { "\u{25B6}" } else { "\u{23F8}" }).size(18))
-        .padding([4, 10])
-        .on_press_maybe(if has_video {
-            Some(Message::TogglePause)
-        } else {
-            None
-        })
+pub(crate) fn pause_play_btn(is_paused: bool) -> Button<'static, Message> {
+    let icon = if is_paused { icons::PLAY } else { icons::PAUSE };
+    Button::new(icon_btn(icon))
+        .padding([0, BTN_HORIZ_PAD])
+        .height(Length::Fixed(BTN_HEIGHT))
+        .on_press(Message::TogglePause)
         .style(styles::main_btn)
 }
 
-pub(crate) fn skip_forward_5_btn<'a>(has_video: bool) -> Button<'a, Message> {
-    Button::new(Text::new("\u{23F5}").size(14))
-        .padding([4, 6])
-        .on_press_maybe(if has_video {
-            Some(Message::SkipForward(5))
-        } else {
-            None
-        })
+pub(crate) fn skip_forward_5_btn() -> Button<'static, Message> {
+    Button::new(icon_btn(icons::SKIP_FORWARD_5))
+        .padding([0, BTN_HORIZ_PAD])
+        .height(Length::Fixed(BTN_HEIGHT))
+        .on_press(Message::SkipForward(5))
         .style(styles::ctrl_btn)
 }
 
-pub(crate) fn skip_forward_10_btn<'a>(has_video: bool) -> Button<'a, Message> {
-    Button::new(Text::new("\u{23E9}").size(14))
-        .padding([4, 6])
-        .on_press_maybe(if has_video {
-            Some(Message::SkipForward(10))
-        } else {
-            None
-        })
+pub(crate) fn skip_forward_10_btn() -> Button<'static, Message> {
+    Button::new(icon_btn(icons::SKIP_FORWARD_10))
+        .padding([0, BTN_HORIZ_PAD])
+        .height(Length::Fixed(BTN_HEIGHT))
+        .on_press(Message::SkipForward(10))
         .style(styles::ctrl_btn)
 }
 
-pub(crate) fn frame_step_btn<'a>(enabled: bool) -> Button<'a, Message> {
-    Button::new(Text::new("|\u{25B6}").size(12))
-        .padding([4, 6])
-        .on_press_maybe(if enabled {
-            Some(Message::FrameStepForward)
-        } else {
-            None
-        })
+pub(crate) fn frame_step_btn() -> Button<'static, Message> {
+    Button::new(icon_btn(icons::FRAME_STEP))
+        .padding([0, BTN_HORIZ_PAD])
+        .height(Length::Fixed(BTN_HEIGHT))
+        .on_press(Message::FrameStepForward)
         .style(styles::ctrl_btn)
 }
 

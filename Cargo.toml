@@ -20,7 +20,7 @@ name = "video-player"
 path = "src/main.rs"
 
 [dependencies]
-iced = { version = "0.14", features = ["image", "advanced", "wgpu"] }
+iced = { version = "0.14", features = ["image", "advanced", "wgpu", "svg"] }
 iced_wgpu = "0.14"
 gstreamer = "0.23"
 gstreamer-app = "0.23" # appsink

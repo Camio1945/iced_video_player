@@ -6,6 +6,7 @@ mod app_state;
 mod boot;
 mod dict;
 mod dict_view;
+mod icons;
 mod styles;
 mod subtitle_discovery;
 mod subtitle_extract;
@@ -19,8 +20,8 @@ use iced::{
     alignment::{Horizontal, Vertical},
     keyboard,
     widget::{
-        Button, Column, Container, Image, PickList, Row, Slider, Space, Stack, Text, container,
-        pick_list, text,
+        Button, Column, Container, Image, MouseArea, PickList, Row, Slider, Space, Stack, Text,
+        container, pick_list, text,
     },
     window,
 };
@@ -78,7 +79,7 @@ fn view(app: &App) -> Element<'_, Message> {
         .height(Length::Fill)
         .spacing(0)
         .push(
-            Container::new(build_player_column(app, has_video, is_paused, is_looping))
+            Container::new(build_player_column(app, is_paused, is_looping))
                 .width(Length::Fill)
                 .height(Length::Fill),
         )
@@ -100,19 +101,24 @@ fn view(app: &App) -> Element<'_, Message> {
         .into()
 }
 
-fn build_player_column<'a>(
-    app: &'a App,
-    has_video: bool,
-    is_paused: bool,
-    is_looping: bool,
-) -> Column<'a, Message> {
-    Column::new()
+fn build_player_column<'a>(app: &'a App, is_paused: bool, is_looping: bool) -> Element<'a, Message> {
+    let bottom_panel = Column::new()
+        .width(Length::Fill)
+        .push(build_seek_bar(app.position, app.video_duration()))
+        .push(build_controls(is_paused, is_looping, app));
+
+    Stack::new()
         .width(Length::Fill)
         .height(Length::Fill)
-        .spacing(0)
         .push(build_player_area(app))
-        .push(build_seek_bar(app.position, app.video_duration()))
-        .push(build_controls(has_video, is_paused, is_looping, app))
+        .push(
+            Column::new()
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .push(Space::new().height(Length::Fill))
+                .push(bottom_panel),
+        )
+        .into()
 }
 
 fn build_player_area(app: &App) -> Element<'_, Message> {
@@ -197,23 +203,18 @@ fn build_seek_bar<'a>(position: f64, duration: f64) -> Container<'a, Message> {
     .padding([0, 8])
 }
 
-fn build_controls<'a>(
-    has_video: bool,
-    is_paused: bool,
-    is_looping: bool,
-    app: &App,
-) -> Row<'a, Message> {
+fn build_controls<'a>(is_paused: bool, is_looping: bool, app: &App) -> Row<'a, Message> {
     let speeds = vec![0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0];
     Row::new()
         .spacing(6)
         .padding([4, 8])
         .align_y(Vertical::Center)
-        .push(widgets::skip_back_10_btn(has_video))
-        .push(widgets::skip_back_5_btn(has_video))
-        .push(widgets::pause_play_btn(has_video, is_paused))
-        .push(widgets::skip_forward_5_btn(has_video))
-        .push(widgets::skip_forward_10_btn(has_video))
-        .push(widgets::frame_step_btn(has_video && is_paused))
+        .push(widgets::skip_back_10_btn())
+        .push(widgets::skip_back_5_btn())
+        .push(widgets::pause_play_btn(is_paused))
+        .push(widgets::skip_forward_5_btn())
+        .push(widgets::skip_forward_10_btn())
+        .push(widgets::frame_step_btn())
         .push(Space::new().width(Length::Fill))
         .push(Text::new("Speed:").size(11))
         .push(
@@ -235,7 +236,12 @@ fn build_controls<'a>(
 
 fn build_video_area(app: &App) -> Element<'_, Message> {
     match &app.video {
-        VideoState::Ready(video) => build_video_player_widget(video, app.content_fit),
+        VideoState::Ready(video) => {
+            MouseArea::new(build_video_player_widget(video, app.content_fit))
+                .on_press(Message::TogglePause)
+                .on_double_click(Message::ToggleFullscreen)
+                .into()
+        }
         VideoState::Loading(p) => build_loading_screen(p),
         VideoState::NoVideo => build_no_video_screen(),
     }

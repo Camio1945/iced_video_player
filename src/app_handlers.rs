@@ -1,6 +1,7 @@
 use crate::app_state::{App, Message, VideoState};
 use crate::text_utils;
 use iced::Task;
+use image::RgbaImage;
 use std::time::Duration;
 
 impl App {
@@ -50,7 +51,9 @@ impl App {
     }
 
     pub fn handle_frame_step_forward(&mut self) -> Task<Message> {
-        if let VideoState::Ready(ref mut v) = self.video {
+        if let VideoState::Ready(ref mut v) = self.video
+            && v.paused()
+        {
             v.step_one_frame();
         }
         Task::none()
@@ -83,8 +86,29 @@ impl App {
         &mut self,
         img: Option<iced_video_player::pgs::PgsImage>,
     ) -> Task<Message> {
-        self.subtitle_image =
-            img.map(|i| iced::widget::image::Handle::from_rgba(i.width, i.height, i.rgba));
+        self.subtitle_image = img.map(|i| {
+            // Scale down PGS subtitle to 55% of original bitmap width
+            // for a more comfortable reading size.
+            let target_w = (i.width as f32 * 0.55_f32) as u32;
+            if target_w >= i.width || i.width == 0 || i.height == 0 {
+                return iced::widget::image::Handle::from_rgba(i.width, i.height, i.rgba);
+            }
+            let ratio = target_w as f32 / i.width as f32;
+            let target_h = (i.height as f32 * ratio) as u32;
+            let src =
+                RgbaImage::from_raw(i.width, i.height, i.rgba).expect("PGS RGBA size mismatch");
+            let scaled = image::imageops::resize(
+                &src,
+                target_w.max(1),
+                target_h.max(1),
+                image::imageops::FilterType::Lanczos3,
+            );
+            iced::widget::image::Handle::from_rgba(
+                target_w.max(1),
+                target_h.max(1),
+                scaled.into_raw(),
+            )
+        });
         Task::none()
     }
 
