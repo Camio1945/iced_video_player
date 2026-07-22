@@ -5,19 +5,21 @@ use crate::app_state::Message;
 use crate::icons;
 use crate::styles;
 
-/// Height of every icon SVG and its enclosing button, ensuring
-/// the visual center of each icon lands on the same horizontal line.
+/// Height of every icon SVG and its enclosing button.
 const ICON_SIZE: f32 = 22.0;
-const BTN_HEIGHT: f32 = 30.0;
-const BTN_HORIZ_PAD: u16 = 6;
+/// Button height for control-row buttons (pill shape).
+const BTN_HEIGHT: f32 = 32.0;
+/// Horizontal padding inside control buttons.
+const BTN_HORIZ_PAD: u16 = 8;
 
-/// Small helper: SVG icon sized to ICON_SIZE, wrapped in a button
-/// with fixed height and horizontal-only padding.
+/// SVG icon sized to ICON_SIZE.
 fn icon_btn(icon_data: &[u8]) -> Svg<'_> {
     Svg::new(icons::svg_handle(icon_data))
         .width(Length::Fixed(ICON_SIZE))
         .height(Length::Fixed(ICON_SIZE))
 }
+
+// ── Transport controls ──────────────────────────────────────────────────
 
 pub(crate) fn skip_back_10_btn() -> Button<'static, Message> {
     Button::new(icon_btn(icons::SKIP_BACK_10))
@@ -35,11 +37,14 @@ pub(crate) fn skip_back_5_btn() -> Button<'static, Message> {
         .style(styles::ctrl_btn)
 }
 
+/// Circular green play/pause button — the hero control.
 pub(crate) fn pause_play_btn(is_paused: bool) -> Button<'static, Message> {
     let icon = if is_paused { icons::PLAY } else { icons::PAUSE };
+    let size = BTN_HEIGHT + 4.0;
     Button::new(icon_btn(icon))
-        .padding([0, BTN_HORIZ_PAD])
-        .height(Length::Fixed(BTN_HEIGHT))
+        .padding(0)
+        .width(Length::Fixed(size))
+        .height(Length::Fixed(size))
         .on_press(Message::TogglePause)
         .style(styles::main_btn)
 }
@@ -68,9 +73,12 @@ pub(crate) fn frame_step_btn() -> Button<'static, Message> {
         .style(styles::ctrl_btn)
 }
 
+// ── Utility controls ────────────────────────────────────────────────────
+
 pub(crate) fn loop_btn<'a>(is_looping: bool) -> Button<'a, Message> {
     Button::new(Text::new("\u{1F501}").size(14))
-        .padding([4, 6])
+        .padding([4, 8])
+        .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::ToggleLoop)
         .style(if is_looping {
             styles::active_btn
@@ -81,21 +89,24 @@ pub(crate) fn loop_btn<'a>(is_looping: bool) -> Button<'a, Message> {
 
 pub(crate) fn mute_btn<'a>(muted: bool) -> Button<'a, Message> {
     Button::new(Text::new(if muted { "\u{1F507}" } else { "\u{1F50A}" }).size(14))
-        .padding([4, 6])
+        .padding([4, 8])
+        .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::ToggleMute)
         .style(styles::ctrl_btn)
 }
 
 pub(crate) fn content_fit_btn<'a>(cf: iced::ContentFit) -> Button<'a, Message> {
     Button::new(Text::new(format!("{:?}", cf)).size(10))
-        .padding([4, 6])
+        .padding([4, 8])
+        .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::CycleContentFit)
         .style(styles::ctrl_btn)
 }
 
 pub(crate) fn fullscreen_btn<'a>() -> Button<'a, Message> {
     Button::new(Text::new("\u{26F6}").size(14))
-        .padding([4, 6])
+        .padding([4, 8])
+        .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::ToggleFullscreen)
         .style(styles::ctrl_btn)
 }

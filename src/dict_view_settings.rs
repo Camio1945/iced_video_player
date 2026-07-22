@@ -6,6 +6,13 @@ use iced::{
     widget::{Button, Column, Container, Row, Space, Text},
 };
 
+// Spotify palette
+const WHITE: Color = Color::WHITE;
+const SILVER: Color = Color::from_rgb(0.702, 0.702, 0.702);
+const NEAR_WHITE: Color = Color::from_rgb(0.796, 0.796, 0.796);
+const MUTED: Color = Color::from_rgb(0.55, 0.55, 0.58);
+const HEADER: Color = Color::from_rgb(0.95, 0.95, 0.98);
+
 // ── Settings tab ──────────────────────────────────────────────────────────
 
 pub(crate) fn build_settings_content(app: &App) -> Element<'_, Message> {
@@ -21,15 +28,13 @@ pub(crate) fn build_settings_content(app: &App) -> Element<'_, Message> {
 }
 
 fn build_settings_title<'a>() -> Text<'a> {
-    Text::new("Settings")
-        .size(16)
-        .color(Color::from_rgb(0.95, 0.95, 0.98))
+    Text::new("Settings").size(16).color(HEADER)
 }
 
 fn build_settings_note<'a>() -> Text<'a> {
     Text::new("Settings are saved automatically.")
         .size(11)
-        .color(Color::from_rgb(0.6, 0.6, 0.65))
+        .color(MUTED)
 }
 
 fn build_subtitle_font_size_section(settings: &AppSettings) -> Container<'static, Message> {
@@ -40,20 +45,16 @@ fn build_subtitle_font_size_section(settings: &AppSettings) -> Container<'static
         Column::new()
             .width(Length::Fill)
             .spacing(10)
-            .push(
-                Text::new("Subtitle Font Size")
-                    .size(13)
-                    .color(Color::from_rgb(0.85, 0.85, 0.9)),
-            )
+            .push(Text::new("Subtitle Font Size").size(13).color(NEAR_WHITE))
             .push(build_font_size_row(size, can_increase, can_decrease))
             .push(
                 Text::new(format!(
-                    "Range: {} – {} px",
+                    "Range: {} \u{2013} {} px",
                     AppSettings::MIN_FONT_SIZE as i32,
                     AppSettings::MAX_FONT_SIZE as i32
                 ))
                 .size(10)
-                .color(Color::from_rgb(0.55, 0.55, 0.6)),
+                .color(MUTED),
             ),
     )
     .width(Length::Fill)
@@ -73,7 +74,7 @@ fn build_font_size_row(size: f32, can_increase: bool, can_decrease: bool) -> Row
     let size_label: Element<'_, Message> = Container::new(
         Text::new(format!("{} px", size as i32))
             .size(16)
-            .color(Color::from_rgb(0.95, 0.95, 1.0))
+            .color(WHITE)
             .align_x(Horizontal::Center)
             .align_y(Vertical::Center)
             .width(Length::Fill)
@@ -147,15 +148,11 @@ fn build_history_header(enabled: bool) -> Row<'static, Message> {
     };
     Row::new()
         .align_y(Vertical::Center)
-        .push(
-            Text::new(toggle_text)
-                .size(13)
-                .color(Color::from_rgb(0.85, 0.85, 0.9)),
-        )
+        .push(Text::new(toggle_text).size(13).color(NEAR_WHITE))
         .push(Space::new().width(Length::Fill))
         .push(
             Button::new(Text::new(if enabled { "Disable" } else { "Enable" }).size(11))
-                .padding([4, 10])
+                .padding([4, 12])
                 .on_press(Message::ToggleHistory)
                 .style(crate::styles::ctrl_btn),
         )
@@ -171,16 +168,12 @@ fn build_history_max_items_row(max_items: usize) -> Row<'static, Message> {
     Row::new()
         .spacing(6)
         .align_y(Vertical::Center)
-        .push(
-            Text::new("Max Items:")
-                .size(11)
-                .color(Color::from_rgb(0.7, 0.7, 0.78)),
-        )
+        .push(Text::new("Max Items:").size(11).color(SILVER))
         .push(dec_btn)
         .push(
             Text::new(format!("{}", max_items))
                 .size(13)
-                .color(Color::from_rgb(0.95, 0.95, 1.0))
+                .color(WHITE)
                 .width(Length::Fixed(36.0))
                 .align_x(Horizontal::Center),
         )
@@ -210,17 +203,13 @@ fn build_small_step_btn(
 }
 
 fn build_history_empty_hint<'a>() -> Text<'a> {
-    Text::new("No recent files yet.")
-        .size(11)
-        .color(Color::from_rgb(0.55, 0.55, 0.6))
+    Text::new("No recent files yet.").size(11).color(MUTED)
 }
 
 fn build_history_list(paths: &[String]) -> Column<'static, Message> {
-    let mut col = Column::new().spacing(2).push(
-        Text::new("Recently Opened:")
-            .size(11)
-            .color(Color::from_rgb(0.7, 0.7, 0.78)),
-    );
+    let mut col = Column::new()
+        .spacing(2)
+        .push(Text::new("Recently Opened:").size(11).color(SILVER));
     for path in paths {
         col = col.push(build_history_row(path));
     }
@@ -248,7 +237,7 @@ fn build_history_row(path: &str) -> Row<'static, Message> {
         )
         .push(
             Button::new(Text::new("\u{2715}").size(9))
-                .padding([2, 5])
+                .padding([2, 6])
                 .on_press(Message::RemoveHistoryItem(path.to_string()))
                 .style(crate::styles::danger_btn),
         )

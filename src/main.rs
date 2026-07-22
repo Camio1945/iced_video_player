@@ -22,7 +22,7 @@ use app_state::{App, Message, VideoState};
 use iced::{
     self, Color, Element, Length, Subscription, Task, Theme,
     alignment::{Horizontal, Vertical},
-    keyboard,
+    border, keyboard,
     widget::{
         Button, Column, Container, Image, MouseArea, PickList, Row, Slider, Space, Stack, Text,
         container, pick_list, text,
@@ -31,7 +31,14 @@ use iced::{
 };
 use iced_video_player::{Video, VideoPlayer};
 
+// ── Spotify color helpers ───────────────────────────────────────────────
+
+const GREEN: Color = Color::from_rgb(0.118, 0.843, 0.376);
+const SILVER: Color = Color::from_rgb(0.702, 0.702, 0.702);
+const MUTED: Color = Color::from_rgb(0.55, 0.55, 0.58);
+
 // ── update ────────────────────────────────────────────────────────────────
+
 fn update(app: &mut App, message: Message) -> Task<Message> {
     App::dispatch(app, message)
 }
@@ -66,7 +73,9 @@ fn view(app: &App) -> Element<'_, Message> {
         .width(Length::Fill)
         .height(Length::Fill)
         .style(|_| container::Style {
-            background: Some(iced::Background::Color(Color::from_rgb(0.1, 0.1, 0.12))),
+            background: Some(iced::Background::Color(Color::from_rgb(
+                0.071, 0.071, 0.071,
+            ))),
             ..Default::default()
         })
         .into()
@@ -77,10 +86,14 @@ fn build_player_column<'a>(
     is_paused: bool,
     is_looping: bool,
 ) -> Element<'a, Message> {
-    let bottom_panel = Column::new()
-        .width(Length::Fill)
-        .push(build_seek_bar(app.position, app.video_duration()))
-        .push(build_controls(is_paused, is_looping, app));
+    let bottom_panel = Container::new(
+        Column::new()
+            .width(Length::Fill)
+            .push(build_seek_bar(app.position, app.video_duration()))
+            .push(build_controls(is_paused, is_looping, app)),
+    )
+    .width(Length::Fill)
+    .style(styles::control_panel);
 
     Column::new()
         .width(Length::Fill)
@@ -93,7 +106,9 @@ fn build_player_column<'a>(
 fn build_player_area(app: &App) -> Element<'_, Message> {
     let video_container = Container::new(build_video_area(app))
         .width(Length::Fill)
-        .height(Length::Fill);
+        .height(Length::Fill)
+        .padding(4)
+        .style(styles::video_surface);
 
     let has_text_sub = !app.subtitle_text.is_empty();
     let has_image_sub = app.subtitle_image.is_some();
@@ -118,12 +133,7 @@ fn build_image_subtitle_layer(handle: &iced::widget::image::Handle) -> Container
     Container::new(Container::new(Image::new(handle.clone())).center_x(Length::Fill))
         .width(Length::Fill)
         .align_bottom(Length::Fill)
-        .padding(iced::Padding {
-            top: 0.0,
-            right: 0.0,
-            bottom: 40.0,
-            left: 0.0,
-        })
+        .padding([0, 8])
 }
 
 fn build_text_subtitle_layer(text: &str, font_size: f32) -> Container<'_, Message> {
@@ -135,78 +145,107 @@ fn build_text_subtitle_layer(text: &str, font_size: f32) -> Container<'_, Messag
     .padding([0, 48])
 }
 
-fn build_toolbar<'a>(has_video: bool, position: f64, duration: f64) -> Row<'a, Message> {
-    Row::new()
-        .spacing(4)
-        .padding(4)
-        .align_y(Vertical::Center)
-        .push(
-            Button::new(Text::new("Open").size(12))
-                .padding([4, 8])
-                .on_press(Message::OpenFile)
-                .style(styles::ctrl_btn),
-        )
-        .push(
-            Button::new(Text::new("Subtitle...").size(12))
-                .padding([4, 8])
-                .on_press_maybe(if has_video {
-                    Some(Message::LoadSubtitle)
-                } else {
-                    None
-                })
-                .style(styles::ctrl_btn),
-        )
-        .push(Space::new().width(Length::Fill))
-        .push(
-            text(format!(
-                "{} / {}",
-                text_utils::format_time(position),
-                text_utils::format_time(duration)
-            ))
-            .size(12),
-        )
+// ── Toolbar ─────────────────────────────────────────────────────────────
+
+fn build_toolbar<'a>(has_video: bool, position: f64, duration: f64) -> Element<'a, Message> {
+    Container::new(
+        Row::new()
+            .spacing(8)
+            .padding([4, 12])
+            .align_y(Vertical::Center)
+            .push(
+                Button::new(Text::new("OPEN").size(11))
+                    .padding([4, 14])
+                    .on_press(Message::OpenFile)
+                    .style(styles::ctrl_btn),
+            )
+            .push(
+                Button::new(Text::new("SUBTITLE...").size(11))
+                    .padding([4, 14])
+                    .on_press_maybe(if has_video {
+                        Some(Message::LoadSubtitle)
+                    } else {
+                        None
+                    })
+                    .style(styles::ctrl_btn),
+            )
+            .push(Space::new().width(Length::Fill))
+            .push(
+                Text::new(text_utils::format_time(position))
+                    .size(14)
+                    .color(GREEN),
+            )
+            .push(Text::new(" / ").size(12).color(SILVER))
+            .push(
+                Text::new(text_utils::format_time(duration))
+                    .size(12)
+                    .color(SILVER),
+            ),
+    )
+    .width(Length::Fill)
+    .style(styles::toolbar_bg)
+    .into()
 }
+
+// ── Seek bar ────────────────────────────────────────────────────────────
 
 fn build_seek_bar<'a>(position: f64, duration: f64) -> Container<'a, Message> {
     Container::new(
         Slider::new(0.0..=duration.max(0.01), position, Message::Seek)
             .step(0.5)
             .on_release(Message::SeekRelease)
-            .width(Length::Fill),
+            .width(Length::Fill)
+            .style(styles::slider_style),
     )
-    .padding([0, 8])
+    .padding(iced::Padding {
+        top: 8.0,
+        right: 16.0,
+        bottom: 0.0,
+        left: 16.0,
+    })
 }
+
+// ── Controls ────────────────────────────────────────────────────────────
 
 fn build_controls<'a>(is_paused: bool, is_looping: bool, app: &App) -> Row<'a, Message> {
     let speeds = vec![0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0, 4.0];
     Row::new()
-        .spacing(6)
-        .padding([4, 8])
+        .spacing(4)
+        .padding([8, 12])
         .align_y(Vertical::Center)
         .push(widgets::skip_back_10_btn())
         .push(widgets::skip_back_5_btn())
+        .push(Space::new().width(2))
         .push(widgets::pause_play_btn(is_paused))
+        .push(Space::new().width(2))
         .push(widgets::skip_forward_5_btn())
         .push(widgets::skip_forward_10_btn())
         .push(widgets::frame_step_btn())
         .push(Space::new().width(Length::Fill))
-        .push(Text::new("Speed:").size(11))
+        // ── right-side utility cluster ──
+        .push(Text::new("Speed:").size(10).color(MUTED))
         .push(
             PickList::new(speeds, Some(app.speed), |s| Message::SetSpeed(s))
                 .text_shaping(text::Shaping::Advanced)
                 .handle(pick_list::Handle::Arrow { size: None })
-                .width(Length::Fixed(80.0)),
+                .width(Length::Fixed(72.0))
+                .style(styles::pick_list_style),
         )
+        .push(Space::new().width(4))
         .push(widgets::loop_btn(is_looping))
         .push(widgets::mute_btn(app.muted))
         .push(
             Slider::new(0.0..=2.0, app.volume, Message::SetVolume)
                 .step(0.05)
-                .width(Length::Fixed(90.0)),
+                .width(Length::Fixed(80.0))
+                .style(styles::slider_style),
         )
+        .push(Space::new().width(2))
         .push(widgets::content_fit_btn(app.content_fit))
         .push(widgets::fullscreen_btn())
 }
+
+// ── Video area ──────────────────────────────────────────────────────────
 
 fn build_video_area(app: &App) -> Element<'_, Message> {
     match &app.video {
@@ -237,48 +276,76 @@ fn build_video_player_widget<'a>(
         .into()
 }
 
+// ── Loading screen ──────────────────────────────────────────────────────
+
 fn build_loading_screen(path: &str) -> Element<'_, Message> {
     Container::new(
-        Column::new()
-            .spacing(10)
-            .align_x(Horizontal::Center)
-            .push(Text::new("Loading video...").size(18))
-            .push(Text::new(path).size(12)),
+        Container::new(
+            Column::new()
+                .spacing(16)
+                .align_x(Horizontal::Center)
+                .push(Text::new("\u{23F3}").size(32))
+                .push(Text::new("Loading video...").size(16).color(Color::WHITE))
+                .push(Text::new(path).size(11).color(MUTED)),
+        )
+        .center_x(Length::Fill)
+        .center_y(Length::Fill),
     )
-    .center_x(Length::Fill)
-    .center_y(Length::Fill)
     .width(Length::Fill)
     .height(Length::Fill)
     .style(styles::placeholder)
     .into()
 }
 
+// ── No-video welcome screen ─────────────────────────────────────────────
+
 fn build_no_video_screen() -> Element<'static, Message> {
     Container::new(
-        Column::new()
-            .spacing(12)
-            .align_x(Horizontal::Center)
-            .push(
-                Image::new(iced::widget::image::Handle::from_bytes(include_bytes!(
-                    "../assets/icon.png"
-                )
-                    as &[u8]))
-                .width(Length::Fixed(140.0)),
-            )
-            .push(Text::new("No video loaded").size(18))
-            .push(Text::new("Click \"Open\" or press O to load a video").size(14))
-            .push(
-                Button::new(Text::new("Open Video File"))
-                    .on_press(Message::OpenFile)
-                    .padding([8, 20]),
-            ),
+        Container::new(build_no_video_content())
+            .center_x(Length::Fill)
+            .center_y(Length::Fill),
     )
-    .center_x(Length::Fill)
-    .center_y(Length::Fill)
     .width(Length::Fill)
     .height(Length::Fill)
     .style(styles::placeholder)
     .into()
+}
+
+fn build_no_video_content() -> Column<'static, Message> {
+    Column::new()
+        .spacing(16)
+        .align_x(Horizontal::Center)
+        .push(build_no_video_icon())
+        .push(Text::new("No video loaded").size(18).color(Color::WHITE))
+        .push(
+            Text::new("Click OPEN or press O to load a video")
+                .size(12)
+                .color(SILVER),
+        )
+        .push(Space::new().height(4))
+        .push(
+            Button::new(Text::new("OPEN VIDEO FILE").size(12))
+                .on_press(Message::OpenFile)
+                .padding([10, 28])
+                .style(styles::main_btn),
+        )
+}
+
+fn build_no_video_icon() -> Container<'static, Message> {
+    Container::new(
+        Image::new(iced::widget::image::Handle::from_bytes(
+            include_bytes!("../assets/icon.png") as &[u8],
+        ))
+        .width(Length::Fixed(96.0)),
+    )
+    .padding(20)
+    .style(|_| container::Style {
+        background: Some(iced::Background::Color(Color::from_rgb(0.10, 0.10, 0.10))),
+        border: border::color(Color::from_rgba(0.118, 0.843, 0.376, 0.35))
+            .width(2.0)
+            .rounded(50.0),
+        ..Default::default()
+    })
 }
 
 // ── subscription ──────────────────────────────────────────────────────────
