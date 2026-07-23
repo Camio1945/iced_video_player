@@ -6,3 +6,6 @@
 docs/git_ignores/
 player_bottom.png
 build_err.txt
+
+# Understand-Anything knowledge graph data (commit .ua/*.json if you want team sharing)
+.ua/
