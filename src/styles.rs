@@ -144,8 +144,8 @@ pub fn slider_style(_: &Theme, status: slider::Status) -> slider::Style {
     slider::Style {
         rail: slider::Rail {
             backgrounds: (
-                Background::Color(Color::from_rgb(0.25, 0.25, 0.25)),
                 Background::Color(GREEN),
+                Background::Color(Color::from_rgb(0.25, 0.25, 0.25)),
             ),
             width: 4.0,
             border: border::rounded(2.0),

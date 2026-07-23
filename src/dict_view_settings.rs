@@ -236,20 +236,33 @@ fn build_history_row(path: &str) -> Row<'static, Message> {
             .width(Length::Fill),
         )
         .push(
-            Button::new(Text::new("\u{2715}").size(9))
-                .padding([2, 6])
-                .on_press(Message::RemoveHistoryItem(path.to_string()))
-                .style(crate::styles::danger_btn),
+            Button::new(
+                Text::new("\u{2715}")
+                    .size(10)
+                    .align_x(Horizontal::Center)
+                    .align_y(Vertical::Center),
+            )
+            .padding(0)
+            .width(Length::Fixed(20.0))
+            .height(Length::Fixed(20.0))
+            .on_press(Message::RemoveHistoryItem(path.to_string()))
+            .style(crate::styles::danger_btn),
         )
 }
 
 fn build_clear_history_button<'a>() -> Button<'a, Message> {
     Button::new(
-        Text::new("Clear All History")
-            .size(11)
-            .align_x(Horizontal::Center),
+        Container::new(
+            Text::new("Clear All History")
+                .size(11)
+                .align_x(Horizontal::Center)
+                .align_y(Vertical::Center),
+        )
+        .width(Length::Fill)
+        .align_x(Horizontal::Center)
+        .align_y(Vertical::Center),
     )
-    .padding([5, 0])
+    .padding([8, 0])
     .width(Length::Fill)
     .on_press(Message::ClearHistory)
     .style(crate::styles::danger_btn)
