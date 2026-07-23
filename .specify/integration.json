@@ -7,7 +7,7 @@
   "integration_settings": {
     "copilot": {
       "script": "ps",
-      "invoke_separator": "."
+      "invoke_separator": "-"
     }
   },
   "integration": "copilot",
