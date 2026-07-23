@@ -5,17 +5,15 @@ use iced::keyboard::{self, Key, key};
 impl App {
     pub fn handle_keyboard_event(&mut self, event: keyboard::Event) -> Task<Message> {
         match event {
-            keyboard::Event::KeyPressed { key, .. } => match &key {
+            keyboard::Event::KeyPressed { key, modifiers, .. } => match &key {
                 Key::Named(key::Named::Space) => self.handle_toggle_pause(),
                 Key::Named(key::Named::ArrowLeft) => self.handle_skip_back(5),
                 Key::Named(key::Named::ArrowRight) => self.handle_skip_forward(5),
                 Key::Named(key::Named::ArrowUp) => {
-                    let v = (self.volume + 0.05).min(2.0);
-                    self.handle_set_volume(v)
+                    self.handle_arrow_key(true, modifiers.control())
                 }
                 Key::Named(key::Named::ArrowDown) => {
-                    let v = (self.volume - 0.05).max(0.0);
-                    self.handle_set_volume(v)
+                    self.handle_arrow_key(false, modifiers.control())
                 }
                 Key::Named(key::Named::Enter) => self.handle_toggle_fullscreen(),
                 Key::Character(c) => self.handle_character_key(c.as_str()),
@@ -31,6 +29,24 @@ impl App {
                 _ => Task::none(),
             },
             _ => Task::none(),
+        }
+    }
+
+    fn handle_arrow_key(&mut self, is_up: bool, ctrl_pressed: bool) -> Task<Message> {
+        if ctrl_pressed {
+            let s = if is_up {
+                (self.speed + 0.25).min(4.0)
+            } else {
+                (self.speed - 0.25).max(0.25)
+            };
+            self.handle_set_speed(s)
+        } else {
+            let v = if is_up {
+                (self.volume + 0.05).min(2.0)
+            } else {
+                (self.volume - 0.05).max(0.0)
+            };
+            self.handle_set_volume(v)
         }
     }
 
