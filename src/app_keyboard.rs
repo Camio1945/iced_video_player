@@ -9,9 +9,7 @@ impl App {
                 Key::Named(key::Named::Space) => self.handle_toggle_pause(),
                 Key::Named(key::Named::ArrowLeft) => self.handle_skip_back(5),
                 Key::Named(key::Named::ArrowRight) => self.handle_skip_forward(5),
-                Key::Named(key::Named::ArrowUp) => {
-                    self.handle_arrow_key(true, modifiers.control())
-                }
+                Key::Named(key::Named::ArrowUp) => self.handle_arrow_key(true, modifiers.control()),
                 Key::Named(key::Named::ArrowDown) => {
                     self.handle_arrow_key(false, modifiers.control())
                 }

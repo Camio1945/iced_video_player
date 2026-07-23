@@ -75,33 +75,35 @@ fn build_tab_btn(
         });
 
     if is_active {
-        // Overlay a SURFACE-colored strip over the bottom 2px of the button's
-        // border, so only the top, left, and right green sides remain visible.
-        let cover = Column::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .push(Space::new().width(Length::Fill).height(Length::Fill))
-            .push(
-                Container::new(Space::new())
-                    .width(Length::Fill)
-                    .height(Length::Fixed(2.0))
-                    .style(|_| iced::widget::container::Style {
-                        background: Some(iced::Background::Color(iced::Color::from_rgb(
-                            0.094, 0.094, 0.094,
-                        ))),
-                        ..Default::default()
-                    }),
-            );
-
         Stack::new()
             .width(Length::Fill)
             .clip(true)
             .push(btn)
-            .push(cover)
+            .push(active_tab_cover())
             .into()
     } else {
         btn.into()
     }
+}
+
+/// Overlay a SURFACE-colored strip over the bottom 2px of the button's
+/// border, so only the top, left, and right green sides remain visible.
+fn active_tab_cover() -> Column<'static, Message> {
+    Column::new()
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .push(Space::new().width(Length::Fill).height(Length::Fill))
+        .push(
+            Container::new(Space::new())
+                .width(Length::Fill)
+                .height(Length::Fixed(2.0))
+                .style(|_| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(iced::Color::from_rgb(
+                        0.094, 0.094, 0.094,
+                    ))),
+                    ..Default::default()
+                }),
+        )
 }
 
 // ── Dictionary tab ────────────────────────────────────────────────────────

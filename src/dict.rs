@@ -137,37 +137,37 @@ fn lookup_english(word: &str) -> (String, Vec<DictSection>, Vec<String>) {
     {
         Ok(resp) if resp.status() == 200 => match resp.into_string() {
             Ok(body) => match serde_json::from_str::<Vec<DictEntry>>(&body) {
-                Ok(entries) if !entries.is_empty() => {
-                    let e = &entries[0];
-                    let phonetic = e
-                        .phonetic
-                        .clone()
-                        .or_else(|| e.phonetics.iter().find_map(|p| p.text.clone()))
-                        .unwrap_or_default();
-                    let mut sections: Vec<DictSection> = Vec::new();
-                    let mut examples: Vec<String> = Vec::new();
-                    for m in &e.meanings {
-                        let mut defs: Vec<(String, Option<String>)> = Vec::new();
-                        for d in m.definitions.iter().take(3) {
-                            defs.push((d.definition.clone(), d.example.clone()));
-                            if let Some(ex) = &d.example {
-                                if examples.len() < 5 && !examples.iter().any(|x: &String| x == ex)
-                                {
-                                    examples.push(ex.clone());
-                                }
-                            }
-                        }
-                        sections.push(DictSection {
-                            part_of_speech: m.part_of_speech.clone(),
-                            definitions: defs,
-                        });
-                    }
-                    (phonetic, sections, examples)
-                }
+                Ok(entries) if !entries.is_empty() => extract_dict_info(&entries[0]),
                 _ => (String::new(), Vec::new(), Vec::new()),
             },
             Err(_) => (String::new(), Vec::new(), Vec::new()),
         },
         Err(_) | Ok(_) => (String::new(), Vec::new(), Vec::new()),
     }
+}
+
+fn extract_dict_info(e: &DictEntry) -> (String, Vec<DictSection>, Vec<String>) {
+    let phonetic = e
+        .phonetic
+        .clone()
+        .or_else(|| e.phonetics.iter().find_map(|p| p.text.clone()))
+        .unwrap_or_default();
+    let mut sections: Vec<DictSection> = Vec::new();
+    let mut examples: Vec<String> = Vec::new();
+    for m in &e.meanings {
+        let mut defs: Vec<(String, Option<String>)> = Vec::new();
+        for d in m.definitions.iter().take(3) {
+            defs.push((d.definition.clone(), d.example.clone()));
+            if let Some(ex) = &d.example {
+                if examples.len() < 5 && !examples.iter().any(|x: &String| x == ex) {
+                    examples.push(ex.clone());
+                }
+            }
+        }
+        sections.push(DictSection {
+            part_of_speech: m.part_of_speech.clone(),
+            definitions: defs,
+        });
+    }
+    (phonetic, sections, examples)
 }
