@@ -1,5 +1,5 @@
 use iced::Length;
-use iced::widget::{Button, Svg, Text};
+use iced::widget::{Button, Container, Svg, Text};
 
 use crate::app_state::Message;
 use crate::icons;
@@ -96,7 +96,12 @@ pub(crate) fn mute_btn<'a>(muted: bool) -> Button<'a, Message> {
 }
 
 pub(crate) fn content_fit_btn<'a>(cf: iced::ContentFit) -> Button<'a, Message> {
-    Button::new(Text::new(format!("{:?}", cf)).size(10))
+    let text = Text::new(format!("{:?}", cf)).size(10);
+    let centered = Container::new(text)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center);
+    
+    Button::new(centered)
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::CycleContentFit)
