@@ -118,7 +118,7 @@ pub fn tab_btn(_: &Theme, status: button::Status) -> button::Style {
     }
 }
 
-/// Sidebar tab: active — elevated surface with white text, green bottom accent.
+/// Sidebar tab: active — elevated surface with white text, green accent border.
 pub fn active_tab_btn(_: &Theme, status: button::Status) -> button::Style {
     let bg = match status {
         button::Status::Hovered => Color::from_rgb(0.20, 0.20, 0.20),

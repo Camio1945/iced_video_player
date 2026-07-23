@@ -3,7 +3,7 @@ use crate::dict::DictSection;
 use iced::{
     Color, Element, Length,
     alignment::{Horizontal, Vertical},
-    widget::{Button, Column, Container, Row, Scrollable, Space, Text},
+    widget::{Button, Column, Container, Row, Scrollable, Space, Stack, Text},
 };
 
 // Spotify palette accents for content inside the sidebar.
@@ -62,18 +62,46 @@ fn build_tab_btn(
     label: &'static str,
     tab: SidebarTab,
     active: SidebarTab,
-) -> Button<'static, Message> {
+) -> Element<'static, Message> {
     let is_active = tab == active;
-    let style = if is_active {
-        crate::styles::active_tab_btn
-    } else {
-        crate::styles::tab_btn
-    };
-    Button::new(Text::new(label).size(12).align_x(Horizontal::Center))
+    let btn = Button::new(Text::new(label).size(12).align_x(Horizontal::Center))
         .padding([10, 4])
         .width(Length::Fill)
         .on_press(Message::SwitchSidebarTab(tab))
-        .style(style)
+        .style(if is_active {
+            crate::styles::active_tab_btn
+        } else {
+            crate::styles::tab_btn
+        });
+
+    if is_active {
+        // Overlay a SURFACE-colored strip over the bottom 2px of the button's
+        // border, so only the top, left, and right green sides remain visible.
+        let cover = Column::new()
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .push(Space::new().width(Length::Fill).height(Length::Fill))
+            .push(
+                Container::new(Space::new())
+                    .width(Length::Fill)
+                    .height(Length::Fixed(2.0))
+                    .style(|_| iced::widget::container::Style {
+                        background: Some(iced::Background::Color(iced::Color::from_rgb(
+                            0.094, 0.094, 0.094,
+                        ))),
+                        ..Default::default()
+                    }),
+            );
+
+        Stack::new()
+            .width(Length::Fill)
+            .clip(true)
+            .push(btn)
+            .push(cover)
+            .into()
+    } else {
+        btn.into()
+    }
 }
 
 // ── Dictionary tab ────────────────────────────────────────────────────────
