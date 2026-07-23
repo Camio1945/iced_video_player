@@ -1,4 +1,4 @@
-use crate::app_state::{App, Message, VideoState};
+use crate::app_state::{App, Message, SidebarTab, VideoState};
 use crate::text_utils;
 use iced::Task;
 use image::RgbaImage;
@@ -136,6 +136,7 @@ impl App {
 
     pub fn handle_search_word(&mut self, word: String) -> Task<Message> {
         let w = word.clone();
+        self.active_tab = SidebarTab::Dictionary;
         self.dict_word = word;
         self.dict_loading = true;
         self.dict_chinese.clear();
