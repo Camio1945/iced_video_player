@@ -75,8 +75,8 @@ pub enum Error {
     Cast,
     #[error("{0}")]
     Io(#[from] std::io::Error),
-    #[error("invalid URI")]
-    Uri,
+    #[error("invalid URI: {0}")]
+    Uri(String),
     #[error("failed to get media capabilities")]
     Caps,
     #[error("failed to query media duration or position")]

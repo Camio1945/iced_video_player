@@ -122,6 +122,8 @@ pub fn save(settings: &AppSettings) {
     if let Ok(path) = config_path()
         && let Ok(json) = serde_json::to_string_pretty(settings)
     {
-        let _ = std::fs::write(path, json);
+        if let Err(e) = std::fs::write(&path, json) {
+            log::warn!("failed to save settings to {}: {e}", path.display());
+        }
     }
 }

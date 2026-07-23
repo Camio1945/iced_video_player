@@ -114,11 +114,12 @@ impl VideoPipeline {
                 &video.instances,
                 (video.prepare_index.load(Ordering::Relaxed) * std::mem::size_of::<Uniforms>())
                     as u64,
-                unsafe {
-                    std::slice::from_raw_parts(
-                        &uniforms as *const _ as *const u8,
-                        std::mem::size_of::<Uniforms>(),
-                    )
+                {
+                    let ptr = &uniforms as *const Uniforms as *const u8;
+                    let len = std::mem::size_of::<Uniforms>();
+                    // SAFETY: Uniforms is #[repr(C)] and stack-local; the pointer
+                    // and length produce a valid byte slice for the lifetime of uniforms.
+                    unsafe { std::slice::from_raw_parts(ptr, len) }
                 },
             );
             video.prepare_index.fetch_add(1, Ordering::Relaxed);

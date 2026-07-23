@@ -127,7 +127,7 @@ fn srt_timestamp(t: f64) -> String {
 }
 
 fn find_ffmpeg() -> Result<PathBuf, String> {
-    for candidate in ["ffmpeg", r"D:\Program Files\ffmpeg\bin\ffmpeg.exe"] {
+    for candidate in ["ffmpeg", "ffmpeg.exe"] {
         if std::process::Command::new(candidate)
             .arg("-version")
             .stdout(std::process::Stdio::null())
@@ -138,7 +138,7 @@ fn find_ffmpeg() -> Result<PathBuf, String> {
             return Ok(PathBuf::from(candidate));
         }
     }
-    Err("ffmpeg not found (required for subtitle extraction)".to_string())
+    Err("ffmpeg not found on PATH (required for subtitle extraction)".to_string())
 }
 
 fn run_ffmpeg(ffmpeg: &Path, args: &[&str], output: &Path) -> Result<(), String> {

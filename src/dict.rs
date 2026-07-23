@@ -100,15 +100,18 @@ fn lookup_chinese(word: &str) -> String {
         .append_pair("langpair", "en|zh-CN")
         .finish();
     let url = format!("https://api.mymemory.translated.net/get?{}", encoded);
-    match ureq::get(&url).call() {
-        Ok(resp) => match resp.into_string() {
+    match ureq::get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .call()
+    {
+        Ok(resp) if resp.status() == 200 => match resp.into_string() {
             Ok(body) => match serde_json::from_str::<MyMemoryResponse>(&body) {
                 Ok(data) => clean_translation(&data.response_data.translated_text),
                 Err(_) => String::new(),
             },
             Err(_) => String::new(),
         },
-        Err(_) => String::new(),
+        _ => String::new(),
     }
 }
 
@@ -128,8 +131,11 @@ fn clean_translation(raw: &str) -> String {
 
 fn lookup_english(word: &str) -> (String, Vec<DictSection>, Vec<String>) {
     let url = format!("https://api.dictionaryapi.dev/api/v2/entries/en/{}", word);
-    match ureq::get(&url).call() {
-        Ok(resp) => match resp.into_string() {
+    match ureq::get(&url)
+        .timeout(std::time::Duration::from_secs(10))
+        .call()
+    {
+        Ok(resp) if resp.status() == 200 => match resp.into_string() {
             Ok(body) => match serde_json::from_str::<Vec<DictEntry>>(&body) {
                 Ok(entries) if !entries.is_empty() => {
                     let e = &entries[0];
@@ -162,6 +168,6 @@ fn lookup_english(word: &str) -> (String, Vec<DictSection>, Vec<String>) {
             },
             Err(_) => (String::new(), Vec::new(), Vec::new()),
         },
-        Err(_) => (String::new(), Vec::new(), Vec::new()),
+        Err(_) | Ok(_) => (String::new(), Vec::new(), Vec::new()),
     }
 }

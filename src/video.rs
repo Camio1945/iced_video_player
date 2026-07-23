@@ -215,10 +215,13 @@ impl Internal {
     /// Syncs audio with video when there is (inevitably) latency presenting the frame.
     pub(crate) fn set_av_offset(&mut self, offset: Duration) {
         if self.sync_av {
-            self.sync_av_counter += 1;
-            self.sync_av_avg = self.sync_av_avg * (self.sync_av_counter - 1) / self.sync_av_counter
-                + offset.as_nanos() as u64 / self.sync_av_counter;
-            if self.sync_av_counter.is_multiple_of(128) {
+            self.sync_av_counter = self.sync_av_counter.saturating_add(1);
+            let prev = self.sync_av_avg;
+            let n = self.sync_av_counter;
+            let delta = offset.as_nanos() as i128;
+            // Use i128 to avoid overflow and retain precision via rounding
+            self.sync_av_avg = ((prev as i128 * (n - 1) as i128 + delta) / n as i128) as u64;
+            if n.is_multiple_of(128) {
                 self.source
                     .set_property("av-offset", -(self.sync_av_avg as i64));
             }
@@ -247,13 +250,24 @@ pub struct SubtitleStreamInfo {
 
 impl Drop for Video {
     fn drop(&mut self) {
-        let inner = self.0.get_mut().expect("failed to lock");
+        let inner = match self.0.get_mut() {
+            Ok(i) => i,
+            Err(_) => {
+                // RwLock is poisoned — best-effort cleanup via a write lock
+                let mut i = match self.0.write() {
+                    Ok(i) => i,
+                    Err(_) => return, // hopeless; let the OS reclaim
+                };
+                let _ = i.source.set_state(gst::State::Null);
+                i.alive.store(false, Ordering::SeqCst);
+                if let Some(worker) = i.worker.take() {
+                    let _ = worker.join();
+                }
+                return;
+            }
+        };
 
-        inner
-            .source
-            .set_state(gst::State::Null)
-            .expect("failed to set state");
-
+        let _ = inner.source.set_state(gst::State::Null);
         inner.alive.store(false, Ordering::SeqCst);
         if let Some(worker) = inner.worker.take()
             && let Err(err) = worker.join()

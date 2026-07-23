@@ -1,4 +1,6 @@
-#![windows_subsystem = "windows"]
+// Use "windows" subsystem for release builds (no console window).
+// Keep the console in debug builds so eprintln! messages are visible.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app_dispatch;
 mod app_handlers;

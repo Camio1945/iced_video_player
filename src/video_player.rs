@@ -296,6 +296,9 @@ fn compute_video_drawing_bounds(
     bounds: iced::Rectangle,
     content_fit: iced::ContentFit,
 ) -> (iced::Rectangle, iced::Size) {
+    if image_size.width <= 0.0 || image_size.height <= 0.0 {
+        return (bounds, bounds.size());
+    }
     let adjusted_fit = content_fit.fit(image_size, bounds.size());
     let scale = iced::Vector::new(
         adjusted_fit.width / image_size.width,

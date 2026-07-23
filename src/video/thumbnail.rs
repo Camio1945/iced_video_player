@@ -3,7 +3,7 @@ use crate::Error;
 use iced::widget::image as img;
 use std::num::NonZeroU8;
 use std::sync::atomic::Ordering;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 impl Video {
     /// Generates a list of thumbnails based on a set of positions in the media, downscaled by a given factor.
@@ -49,7 +49,14 @@ impl Video {
     ) -> Result<img::Handle, Error> {
         inner.seek(pos, true)?;
         inner.upload_frame.store(false, Ordering::SeqCst);
+        let deadline = Instant::now() + Duration::from_secs(5);
         while !inner.upload_frame.load(Ordering::SeqCst) {
+            if !inner.alive.load(Ordering::SeqCst) {
+                return Err(Error::Lock);
+            }
+            if Instant::now() > deadline {
+                return Err(Error::Sync);
+            }
             std::thread::sleep(Duration::from_millis(1));
         }
         let frame_guard = inner.frame.lock().map_err(|_| Error::Lock)?;

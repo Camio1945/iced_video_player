@@ -38,18 +38,18 @@ impl Video {
             .map_err(|_| Error::Cast)?;
 
         let video_sink: gst::Element = pipeline.property("video-sink");
-        let pad = video_sink.pads().first().cloned().unwrap();
-        let pad = pad.dynamic_cast::<gst::GhostPad>().unwrap();
+        let pad = video_sink.pads().first().cloned().ok_or(Error::Caps)?;
+        let pad = pad.dynamic_cast::<gst::GhostPad>().map_err(|_| Error::Cast)?;
         let bin = pad
             .parent_element()
-            .unwrap()
+            .ok_or(Error::Cast)?
             .downcast::<gst::Bin>()
-            .unwrap();
-        let video_sink = bin.by_name("iced_video").unwrap();
-        let video_sink = video_sink.downcast::<gst_app::AppSink>().unwrap();
+            .map_err(|_| Error::Cast)?;
+        let video_sink = bin.by_name("iced_video").ok_or(Error::AppSink("iced_video".into()))?;
+        let video_sink = video_sink.downcast::<gst_app::AppSink>().map_err(|_| Error::Cast)?;
 
         let text_sink: gst::Element = pipeline.property("text-sink");
-        let text_sink = text_sink.downcast::<gst_app::AppSink>().unwrap();
+        let text_sink = text_sink.downcast::<gst_app::AppSink>().map_err(|_| Error::Cast)?;
 
         Self::from_gst_pipeline(pipeline, video_sink, Some(text_sink))
     }
@@ -71,7 +71,7 @@ impl Video {
         static NEXT_ID: AtomicU64 = AtomicU64::new(0);
         let id = NEXT_ID.fetch_add(1, Ordering::SeqCst);
 
-        let pad = video_sink.pads().first().cloned().unwrap();
+        let pad = video_sink.pads().first().cloned().ok_or(Error::Caps)?;
         let props = Self::extract_pipeline_properties(&pipeline, &pad)?;
         let (builtin_text_subtitle, subtitle_streams) =
             Self::auto_select_english_streams(&pipeline);
