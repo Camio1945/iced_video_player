@@ -17,6 +17,7 @@ impl App {
                     let v = (self.volume - 0.05).max(0.0);
                     self.handle_set_volume(v)
                 }
+                Key::Named(key::Named::Enter) => self.handle_toggle_fullscreen(),
                 Key::Character(c) => self.handle_character_key(c.as_str()),
                 Key::Named(key::Named::Escape) => {
                     if self.fullscreen {
