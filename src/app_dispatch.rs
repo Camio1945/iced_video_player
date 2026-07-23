@@ -38,6 +38,7 @@ impl App {
             Message::CycleContentFit => self.handle_cycle_content_fit(),
             Message::WindowOpened(id) => self.handle_window_opened(id),
             Message::KeyboardEvent(e) => self.handle_keyboard_event(e),
+            Message::AdjustVolume(d) => self.handle_adjust_volume(d),
             _ => self.dispatch_settings(message),
         }
     }

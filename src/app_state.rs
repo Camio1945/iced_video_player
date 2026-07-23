@@ -3,11 +3,17 @@ use iced_video_player::Video;
 use crate::dict::{DictResult, DictSection};
 use crate::settings::AppSettings;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SidebarTab {
     Dictionary,
     Settings,
     Playlist,
+}
+
+impl Default for SidebarTab {
+    fn default() -> Self {
+        SidebarTab::Dictionary
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -51,6 +57,7 @@ pub enum Message {
     ClearHistory,
     RemoveHistoryItem(String),
     OpenHistoryItem(String),
+    AdjustVolume(f64),
 }
 
 pub enum VideoState {
@@ -87,6 +94,7 @@ pub struct App {
 
 impl Default for App {
     fn default() -> Self {
+        let settings = crate::settings::load();
         App {
             video: VideoState::NoVideo,
             position: 0.0,
@@ -109,8 +117,8 @@ impl Default for App {
             current_file_path: None,
             window_id: None,
             pending_subtitle: None,
-            active_tab: SidebarTab::Dictionary,
-            settings: crate::settings::load(),
+            active_tab: settings.active_tab,
+            settings,
         }
     }
 }

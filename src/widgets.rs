@@ -80,7 +80,7 @@ pub(crate) fn loop_btn<'a>(is_looping: bool) -> Button<'a, Message> {
     let centered = Container::new(text)
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center);
-    
+
     Button::new(centered)
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
@@ -98,7 +98,7 @@ pub(crate) fn mute_btn<'a>(muted: bool) -> Button<'a, Message> {
     let centered = Container::new(text)
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center);
-    
+
     Button::new(centered)
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
@@ -111,7 +111,7 @@ pub(crate) fn content_fit_btn<'a>(cf: iced::ContentFit) -> Button<'a, Message> {
     let centered = Container::new(text)
         .align_x(iced::alignment::Horizontal::Center)
         .align_y(iced::alignment::Vertical::Center);
-    
+
     Button::new(centered)
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))

@@ -4,6 +4,8 @@ use iced::Task;
 impl App {
     pub fn handle_switch_sidebar_tab(&mut self, tab: SidebarTab) -> Task<Message> {
         self.active_tab = tab;
+        self.settings.active_tab = tab;
+        crate::settings::save(&self.settings);
         Task::none()
     }
 

@@ -5,6 +5,7 @@
 //! `$HOME/.config/video-player/settings.json`. The directory is created
 //! automatically on first save.
 
+use crate::app_state::SidebarTab;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -21,6 +22,9 @@ pub struct AppSettings {
     /// Recently opened video file paths, most-recent first.
     #[serde(default)]
     pub recent_files: Vec<String>,
+    /// Which sidebar tab was active when the app was last closed.
+    #[serde(default)]
+    pub active_tab: SidebarTab,
 }
 
 fn default_history_enabled() -> bool {
@@ -37,6 +41,7 @@ impl Default for AppSettings {
             history_enabled: true,
             max_history_items: 100,
             recent_files: Vec::new(),
+            active_tab: SidebarTab::default(),
         }
     }
 }

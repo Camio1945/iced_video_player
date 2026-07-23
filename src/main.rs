@@ -5,6 +5,7 @@
 mod app_dispatch;
 mod app_handlers;
 mod app_handlers_settings;
+mod app_handlers_subtitle;
 mod app_keyboard;
 mod app_state;
 mod boot;
@@ -275,6 +276,7 @@ fn build_video_player_widget<'a>(
         .on_subtitle_text(|t: Option<String>| Message::SubtitleText(t.unwrap_or_default()))
         .on_subtitle_image(Message::SubtitleImage)
         .on_error(|e: &glib::Error| Message::PlaybackError(e.to_string()))
+        .on_mouse_wheel_scrolled(Message::AdjustVolume)
         .into()
 }
 
