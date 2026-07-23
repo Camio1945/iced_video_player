@@ -76,7 +76,12 @@ pub(crate) fn frame_step_btn() -> Button<'static, Message> {
 // ── Utility controls ────────────────────────────────────────────────────
 
 pub(crate) fn loop_btn<'a>(is_looping: bool) -> Button<'a, Message> {
-    Button::new(Text::new("\u{1F501}").size(14))
+    let text = Text::new("\u{1F501}").size(14);
+    let centered = Container::new(text)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center);
+    
+    Button::new(centered)
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::ToggleLoop)
@@ -88,7 +93,13 @@ pub(crate) fn loop_btn<'a>(is_looping: bool) -> Button<'a, Message> {
 }
 
 pub(crate) fn mute_btn<'a>(muted: bool) -> Button<'a, Message> {
-    Button::new(Text::new(if muted { "\u{1F507}" } else { "\u{1F50A}" }).size(14))
+    let icon = if muted { "\u{1F507}" } else { "\u{1F50A}" };
+    let text = Text::new(icon).size(14);
+    let centered = Container::new(text)
+        .align_x(iced::alignment::Horizontal::Center)
+        .align_y(iced::alignment::Vertical::Center);
+    
+    Button::new(centered)
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::ToggleMute)

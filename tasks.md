@@ -336,14 +336,32 @@
 
 ---
 
+### Task 3.2: Center Loop and Mute Button Icons
+**Status**: ✅ Done
+**Priority**: Medium
+**Description**: The Loop button and Mute button on the controller bar have icons that are not centered. Center the icons properly within the button bounds.
+
+**Acceptance Criteria**:
+- [x] Loop button icon is horizontally and vertically centered
+- [x] Mute button icon is horizontally and vertically centered
+- [x] Centering works at all window sizes
+- [x] No regression in other button alignments
+
+**Implementation Notes**:
+- Fixed in `src/widgets.rs:loop_btn()` and `mute_btn()` by wrapping Text in Container with align_x/align_y centering
+- Same pattern as Task 3.1 (Contain button fix)
+- Compilation verified successful
+
+---
+
 ## Summary
 
 | Phase | Total | Done | Remaining |
 |-------|-------|------|-----------|
 | Phase 1: Core Pipeline | 9 | 9 | 0 |
 | Phase 2: Desktop UI | 10 | 10 | 0 |
-| Phase 3: Bug Fixes | 1 | 1 | 0 |
-| **Total** | **20** | **20** | **0** |
+| Phase 3: Bug Fixes | 2 | 2 | 0 |
+| **Total** | **21** | **21** | **0** |
 
 ---
 
