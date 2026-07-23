@@ -28,12 +28,13 @@ const CARD_RADIUS: f32 = 8.0;
 
 // ── Button styles ───────────────────────────────────────────────────────
 
-/// Standard control button: dark pill with white text.
+/// Standard control button: elevated pill with white icon on a mid-gray
+/// background — clearly visible against the dark control-panel surface.
 pub fn ctrl_btn(_: &Theme, status: button::Status) -> button::Style {
     let bg = match status {
-        button::Status::Hovered => Color::from_rgb(0.18, 0.18, 0.18),
-        button::Status::Pressed => Color::from_rgb(0.10, 0.10, 0.10),
-        _ => MID,
+        button::Status::Hovered => Color::from_rgb(0.31, 0.31, 0.31),
+        button::Status::Pressed => Color::from_rgb(0.16, 0.16, 0.16),
+        _ => Color::from_rgb(0.24, 0.24, 0.24), // ~15 % above SURFACE
     };
     button::Style {
         background: Some(Background::Color(bg)),
