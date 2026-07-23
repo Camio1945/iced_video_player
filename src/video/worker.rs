@@ -130,6 +130,12 @@ impl Video {
         let map = buffer.map_readable().map_err(|_| gst::FlowError::Error)?;
         let data = map.as_slice();
 
+        // Keep the subtitle visible for an extra second after its natural
+        // end time.  This avoids flickering when short gaps exist between
+        // consecutive lines, and gives the viewer a moment to finish reading
+        // even when there is a longer pause.
+        const SUBTITLE_LINGER: gst::ClockTime = gst::ClockTime::from_seconds(1);
+
         if let Ok(text) = std::str::from_utf8(data) {
             *sub_refs.text.lock().map_err(|_| gst::FlowError::Error)? = Some(text.to_string());
             sub_refs.upload_text.store(true, Ordering::SeqCst);
@@ -137,13 +143,13 @@ impl Video {
             // external SRT replaced an embedded PGS stream).
             *sub_refs.image.lock().map_err(|_| gst::FlowError::Error)? = None;
             sub_refs.upload_image.store(true, Ordering::SeqCst);
-            *clear_subtitles_at = Some(frame_pts + duration);
+            *clear_subtitles_at = Some(frame_pts + duration + SUBTITLE_LINGER);
         } else if let Some(img) = crate::pgs::decode(data) {
             *sub_refs.image.lock().map_err(|_| gst::FlowError::Error)? = Some(img);
             sub_refs.upload_image.store(true, Ordering::SeqCst);
             *sub_refs.text.lock().map_err(|_| gst::FlowError::Error)? = None;
             sub_refs.upload_text.store(true, Ordering::SeqCst);
-            *clear_subtitles_at = Some(frame_pts + duration);
+            *clear_subtitles_at = Some(frame_pts + duration + SUBTITLE_LINGER);
         }
         Ok(())
     }
