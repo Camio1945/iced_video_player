@@ -36,6 +36,7 @@ use iced::{
     window,
 };
 use iced_video_player::{Video, VideoPlayer};
+use std::sync::OnceLock;
 use std::time::Duration;
 
 // ── Spotify color helpers ───────────────────────────────────────────────
@@ -43,6 +44,26 @@ use std::time::Duration;
 const GREEN: Color = Color::from_rgb(0.118, 0.843, 0.376);
 const SILVER: Color = Color::from_rgb(0.702, 0.702, 0.702);
 const MUTED: Color = Color::from_rgb(0.55, 0.55, 0.58);
+
+// ── Static assets ───────────────────────────────────────────────────────
+
+/// Cached image handle for the no-video welcome icon.
+///
+/// `iced::widget::image::Handle::from_bytes` generates a *new unique* `Id`
+/// on every call, so creating the handle inside the view function made the
+/// wgpu renderer treat the icon as a brand-new image on every redraw and
+/// re-upload it asynchronously — during which the image is drawn as
+/// nothing for a frame, producing a visible flicker whenever the user
+/// hovered the OPEN VIDEO FILE button (any pointer move triggers a view
+/// rebuild). Caching the handle in a `OnceLock` gives it a stable `Id` so
+/// the renderer's atlas entry is reused across frames.
+static NO_VIDEO_ICON: OnceLock<iced::widget::image::Handle> = OnceLock::new();
+
+fn no_video_icon_handle() -> &'static iced::widget::image::Handle {
+    NO_VIDEO_ICON.get_or_init(|| {
+        iced::widget::image::Handle::from_bytes(include_bytes!("../assets/icon.png") as &[u8])
+    })
+}
 
 // ── update ────────────────────────────────────────────────────────────────
 
@@ -341,10 +362,8 @@ fn build_no_video_content() -> Column<'static, Message> {
 
 fn build_no_video_icon() -> Container<'static, Message> {
     Container::new(
-        Image::new(iced::widget::image::Handle::from_bytes(
-            include_bytes!("../assets/icon.png") as &[u8],
-        ))
-        .width(Length::Fixed(96.0)),
+        Image::new(no_video_icon_handle().clone())
+            .width(Length::Fixed(96.0)),
     )
     .padding(20)
     .style(|_| container::Style {
