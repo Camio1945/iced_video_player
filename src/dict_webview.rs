@@ -35,6 +35,7 @@ fn debug_log(msg: &str) {
 static mut WEBVIEW: Option<wry::WebView> = None;
 static mut PARENT_HWND: isize = 0;
 static mut POPUP_HWND: isize = 0;
+static mut HOOK_HANDLE: isize = 0;
 static PAGE_LOADED: AtomicBool = AtomicBool::new(false);
 static mut CURRENT_WORD: String = String::new();
 static mut LAST_BOUNDS_LOG: Option<(i32, i32, i32, i32)> = None;
@@ -124,6 +125,16 @@ struct NativePoint {
 }
 
 #[cfg(target_os = "windows")]
+#[repr(C)]
+struct KBDLLHOOKSTRUCT {
+    vk_code: u32,
+    scan_code: u32,
+    flags: u32,
+    time: u32,
+    dw_extra_info: usize,
+}
+
+#[cfg(target_os = "windows")]
 unsafe extern "system" {
     fn FindWindowW(class: *const u16, window: *const u16) -> isize;
     fn GetClientRect(hwnd: isize, rect: *mut NativeRect) -> i32;
@@ -133,6 +144,17 @@ unsafe extern "system" {
     fn GetWindowTextW(hwnd: isize, lpstring: *mut u16, cch: i32) -> i32;
     fn SetWindowPos(hwnd: isize, hwndinsertafter: isize, x: i32, y: i32, cx: i32, cy: i32, uflags: u32) -> i32;
     fn ClientToScreen(hwnd: isize, lppoint: *mut NativePoint) -> i32;
+    fn PostMessageW(hwnd: isize, msg: u32, wparam: usize, lparam: isize) -> i32;
+    fn GetForegroundWindow() -> isize;
+    fn IsChild(parent: isize, child: isize) -> i32;
+    fn SetWindowsHookExW(
+        idhook: i32,
+        lpfn: Option<unsafe extern "system" fn(i32, usize, isize) -> isize>,
+        hmod: isize,
+        dwthreadid: u32,
+    ) -> isize;
+    fn UnhookWindowsHookEx(hhook: isize) -> i32;
+    fn CallNextHookEx(hhook: isize, ncode: i32, wparam: usize, lparam: isize) -> isize;
     fn CreateWindowExW(
         dwexstyle: u32,
         lpclassname: *const u16,
@@ -151,6 +173,15 @@ unsafe extern "system" {
 }
 
 #[cfg(target_os = "windows")]
+const WM_CLOSE: u32 = 0x0010;
+#[cfg(target_os = "windows")]
+const WH_KEYBOARD_LL: i32 = 13;
+#[cfg(target_os = "windows")]
+const WM_SYSKEYDOWN: usize = 0x0104;
+#[cfg(target_os = "windows")]
+const VK_F4: u32 = 0x73;
+
+#[cfg(target_os = "windows")]
 const SWP_SHOWWINDOW: u32 = 0x0040;
 #[cfg(target_os = "windows")]
 const SWP_FRAMECHANGED: u32 = 0x0020;
@@ -167,8 +198,9 @@ const WS_EX_TOOLWINDOW: u32 = 0x0000_0080;
 /// Don't activate when shown.
 #[cfg(target_os = "windows")]
 const WS_EX_NOACTIVATE: u32 = 0x0800_0000;
-/// Stay above sibling windows (keeps it above the Iced window).
+/// `WS_EX_TOPMOST` (kept for reference / future debugging only).
 #[cfg(target_os = "windows")]
+#[allow(dead_code)]
 const WS_EX_TOPMOST: u32 = 0x0000_0008;
 
 fn to_wide(s: &str) -> Vec<u16> {
@@ -291,7 +323,12 @@ pub fn tick(is_dict_active: bool, dict_word: Option<&str>, window_title: &str) {
 /// Destroy the webview immediately (called when the application exits).
 #[allow(dead_code)]
 pub fn destroy() {
+    uninstall_hook();
     unsafe {
+        if POPUP_HWND != 0 {
+            let _ = DestroyWindow(POPUP_HWND);
+            POPUP_HWND = 0;
+        }
         WEBVIEW = None;
         CURRENT_WORD.clear();
         PAGE_LOADED.store(false, Ordering::SeqCst);
@@ -309,8 +346,71 @@ pub fn has_webview() -> bool {
 // We host the WebView in a separate top-level `WS_POPUP` window owned by the
 // main Iced window. The webview's compose layer (DXGI/DirectComposition) then
 // lives in its own surface and is never touched by Iced's wgpu clear pass.
-// This is the only arrangement that survives a continuously-running video
-// widget painting into the parent every frame.
+//
+// A low-level keyboard hook is installed while the popup is alive so that
+// Alt+F4 (which normally goes to the WebView2 child or popup) is intercepted
+// at the system input level and redirected to the Iced window, ensuring the
+// whole application closes with a single key press.
+
+/// Low-level keyboard hook that intercepts Alt+F4 and forwards it to the
+/// owning Iced window when the dictionary popup is active.
+#[cfg(target_os = "windows")]
+unsafe extern "system" fn dict_keyboard_hook(ncode: i32, wparam: usize, lparam: isize) -> isize {
+    if ncode >= 0 && wparam == WM_SYSKEYDOWN {
+        let ks = unsafe { &*(lparam as *const KBDLLHOOKSTRUCT) };
+        if ks.vk_code == VK_F4 {
+            unsafe {
+                let popup = POPUP_HWND;
+                let owner = PARENT_HWND;
+                // Only intercept if the dictionary popup is alive AND our
+                // application (Iced window or popup) is in the foreground.
+                // Otherwise we'd eat Alt+F4 meant for another application.
+                if popup != 0 && owner != 0 {
+                    let fg = GetForegroundWindow();
+                    let fg_is_ours =
+                        fg == owner || fg == popup || IsChild(popup, fg) != 0;
+                    if fg_is_ours {
+                        debug_log("ALT+F4 hook fired; posting WM_CLOSE to Iced window");
+                        let _ = PostMessageW(owner, WM_CLOSE, 0, 0);
+                        return 1; // eat the keystroke
+                    }
+                }
+            }
+        }
+    }
+    unsafe { CallNextHookEx(HOOK_HANDLE, ncode, wparam, lparam) }
+}
+
+/// Install the low-level keyboard hook that catches Alt+F4.
+#[cfg(target_os = "windows")]
+fn install_hook() {
+    unsafe {
+        if HOOK_HANDLE == 0 {
+            HOOK_HANDLE = SetWindowsHookExW(
+                WH_KEYBOARD_LL,
+                Some(dict_keyboard_hook),
+                0,
+                0,
+            );
+            debug_log(&format!(
+                "low-level keyboard hook installed h={}",
+                HOOK_HANDLE
+            ));
+        }
+    }
+}
+
+/// Uninstall the low-level keyboard hook.
+#[cfg(target_os = "windows")]
+fn uninstall_hook() {
+    unsafe {
+        if HOOK_HANDLE != 0 {
+            UnhookWindowsHookEx(HOOK_HANDLE);
+            debug_log("low-level keyboard hook uninstalled");
+            HOOK_HANDLE = 0;
+        }
+    }
+}
 
 #[cfg(target_os = "windows")]
 fn create_popup(owner: isize, screen_x: i32, screen_y: i32, w: i32, h: i32) -> isize {
@@ -321,8 +421,8 @@ fn create_popup(owner: isize, screen_x: i32, screen_y: i32, w: i32, h: i32) -> i
     let title = to_wide("");
     let hinstance = 0;
     unsafe {
-        CreateWindowExW(
-            WS_EX_TOOLWINDOW | WS_EX_TOPMOST | WS_EX_NOACTIVATE,
+        let popup = CreateWindowExW(
+            WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
             class.as_ptr(),
             title.as_ptr(),
             WS_POPUP | WS_VISIBLE,
@@ -330,17 +430,22 @@ fn create_popup(owner: isize, screen_x: i32, screen_y: i32, w: i32, h: i32) -> i
             screen_y,
             w,
             h,
-            owner, // hwndParent == owner → owned popup that stays above Iced
+            owner,
             0,
             hinstance as isize,
             std::ptr::null::<isize>() as isize,
-        )
+        );
+        if popup != 0 {
+            install_hook();
+        }
+        popup
     }
 }
 
 #[cfg(target_os = "windows")]
 fn destroy_popup(hwnd: isize) {
     if hwnd != 0 {
+        uninstall_hook();
         unsafe {
             let _ = DestroyWindow(hwnd);
         }
@@ -537,6 +642,7 @@ fn tick_impl(is_dict_active: bool, dict_word: Option<&str>, window_title: &str) 
             .with_user_agent(MOBILE_UA)
             .with_theme(wry::Theme::Dark)
             .with_bounds(initial_rect)
+            .with_browser_accelerator_keys(false)
             .with_initialization_script(DARKREADER_JS)
             .with_on_page_load_handler(|event, _url| {
                 if let wry::PageLoadEvent::Finished = event {
@@ -612,6 +718,7 @@ fn tick_impl(is_dict_active: bool, dict_word: Option<&str>, window_title: &str) 
             .with_user_agent(MOBILE_UA)
             .with_theme(wry::Theme::Dark)
             .with_bounds(initial_rect)
+            .with_browser_accelerator_keys(false)
             .with_initialization_script(DARKREADER_JS)
             .with_on_page_load_handler(|event, _url| {
                 if let wry::PageLoadEvent::Finished = event {
