@@ -102,7 +102,8 @@ impl App {
 
     pub fn handle_close_dictionary(&mut self) -> Task<Message> {
         self.clear_dictionary();
-        // The webview will be torn down on the next tick.
+        // The webview popup will be hidden on the next tick (the webview
+        // itself stays alive so future searches are instant).
         Task::none()
     }
 

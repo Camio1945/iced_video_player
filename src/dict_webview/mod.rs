@@ -2,9 +2,15 @@
 //!
 //! Manages a native child webview (via `wry` on Windows) positioned over the
 //! right sidebar's Dictionary tab body. The webview loads the Youdao mobile
-//! dictionary page and injects dark-mode styles + node-removal rules on page
-//! load, preserving all features from the reference `test-iced` example:
+//! dictionary page once and injects dark-mode styles + node-removal rules on
+//! page load, preserving all features from the reference `test-iced` example:
 //! darkreader.js, aggressive CSS override, class-node removal, and mobile UA.
+//!
+//! Subsequent word searches are performed **without reloading the page**: a
+//! JavaScript snippet is injected via `evaluate_script` that fills the page's
+//! `#search_input` box (using the native value setter so framework bindings
+//! stay in sync) and dispatches an Enter keypress, letting Youdao's own search
+//! handler do the work.
 
 #![allow(unsafe_code)]
 
@@ -168,7 +174,7 @@ fn tick_impl(is_dict_active: bool, dict_word: Option<&str>, window_title: &str) 
         return;
     }
 
-    if handle_word_teardown_and_rebuild(word) {
+    if handle_word_change(word) {
         return;
     }
 
@@ -209,28 +215,45 @@ fn ensure_owner_window(window_title: &str, word: &str) {
     }
 }
 
-/// Handle word change: tear down old webview if word changed, create new one.
+/// Handle word change: search the new word via JavaScript injection when the
+/// webview is already alive, instead of tearing it down and reloading the page.
 /// Returns `true` if we should early-return from `tick_impl`.
 #[cfg(target_os = "windows")]
-fn handle_word_teardown_and_rebuild(word: &str) -> bool {
+fn handle_word_change(word: &str) -> bool {
     unsafe {
         let word_changed = CURRENT_WORD != word;
         if !word_changed {
             return false;
         }
-        teardown_webview_and_popup();
-        if word.is_empty() {
-            debug_log("popup destroyed (word cleared)");
-            CURRENT_WORD.clear();
-            return true;
+        let old_word = std::mem::replace(&mut CURRENT_WORD, word.to_string());
+
+        // If the webview is already alive, search the new word by injecting
+        // JavaScript — no page reload. If the page hasn't finished loading
+        // yet, the script silently no-ops (the `#search_input` guard) and the
+        // race-condition handler in position_popup_and_inject_scripts will
+        // search CURRENT_WORD once the page is ready.
+        if !word.is_empty() {
+            if let Some(ref wv) = WEBVIEW {
+                debug_log(&format!(
+                    "searching '{}' via JS injection (was '{}')",
+                    word, old_word
+                ));
+                let _ = wv.evaluate_script(&search_script(word));
+            }
+        } else {
+            debug_log("word cleared, hiding popup (keeping webview alive)");
         }
-        CURRENT_WORD = word.to_string();
+
+        // Never tear down the webview on a word change — keep it alive so
+        // subsequent searches are instant. The normal flow below will
+        // position / show / hide the popup as needed.
+        false
     }
-    false
 }
 
 /// Tear down the current webview and popup window, resetting associated state.
 #[cfg(target_os = "windows")]
+#[allow(dead_code)]
 fn teardown_webview_and_popup() {
     use self::popup_win32::destroy_popup;
     unsafe {
@@ -347,6 +370,18 @@ fn position_popup_and_inject_scripts(
         if let Some(ref wv) = WEBVIEW {
             if PAGE_LOADED.swap(false, Ordering::SeqCst) {
                 let _ = wv.evaluate_script(DARK_OVERRIDE_JS);
+                // After the initial page load, search the current word via JS
+                // injection. This handles the race condition where the word
+                // changed while the page was still loading (the URL may have
+                // been for a different word).
+                let word = CURRENT_WORD.clone();
+                if !word.is_empty() {
+                    debug_log(&format!(
+                        "page loaded, searching current word '{}' via JS injection",
+                        word
+                    ));
+                    let _ = wv.evaluate_script(&search_script(&word));
+                }
             }
         }
     }
@@ -370,4 +405,38 @@ fn url_encode_word(s: &str) -> String {
             }
         })
         .collect()
+}
+
+// ── JavaScript search injection ──────────────────────────────────────────
+
+/// Build a JS snippet that fills the Youdao search box (`#search_input`)
+/// with `word` and fires an Enter keypress, so the page's own search handler
+/// performs the lookup — no page reload required.
+///
+/// The native `HTMLInputElement.prototype.value` setter is used (rather than
+/// a direct `input.value = …`) so that framework-level getters/setters on the
+/// input don't intercept the assignment. An `input` event is dispatched so the
+/// framework syncs its internal model, then the full Enter key sequence
+/// (`keydown` → `keypress` → `keyup`) is dispatched to trigger submission.
+fn search_script(word: &str) -> String {
+    format!(
+        r#"
+(function(){{
+    var input = document.getElementById('search_input');
+    if(!input) return;
+    var setter = Object.getOwnPropertyDescriptor(
+        window.HTMLInputElement.prototype, 'value').set;
+    if(setter){{ setter.call(input, {word:?}); }} else {{ input.value = {word:?}; }}
+    input.dispatchEvent(new Event('input', {{bubbles:true}}));
+    ['keydown','keypress','keyup'].forEach(function(t){{
+        input.dispatchEvent(new KeyboardEvent(t, {{
+            bubbles:true, cancelable:true,
+            key:'Enter', code:'Enter',
+            keyCode:13, which:13, charCode:13
+        }}));
+    }});
+}})();
+"#,
+        word = word
+    )
 }
