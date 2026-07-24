@@ -114,10 +114,7 @@ fn active_tab_cover() -> Column<'static, Message> {
 fn build_dictionary_content(app: &App) -> Element<'_, Message> {
     let placeholder: Element<'_, Message> = if crate::dict_webview::has_webview() {
         // Transparent placeholder – the child webview is drawn on top by the OS.
-        Space::new()
-            .width(Length::Fill)
-            .height(Length::Fill)
-            .into()
+        Space::new().width(Length::Fill).height(Length::Fill).into()
     } else if app.dict_loading {
         build_dict_loading_placeholder()
     } else if app.dict_word.is_empty() {
