@@ -1,2 +1,27 @@
    Compiling iced_video_player v0.6.0 (D:\git\third-party\iced_video_player)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.22s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 8.28s
+     Running unittests src\lib.rs (target\debug\deps\iced_video_player-af0da7b316791bd6.exe)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src\main.rs (target\debug\deps\video_player-ea543e95c5f661c9.exe)
+
+running 5 tests
+test playlist::tests::test_is_video_file ... ok
+test subtitle_parse::tests::parse_srt_crlf ... ok
+test subtitle_parse::tests::parse_srt ... ok
+test subtitle_parse::tests::parse_ass_dialogue ... ok
+test subtitle_parse::tests::parse_vtt_with_settings ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests iced_video_player
+
+running 1 test
+test src\lib.rs - (line 9) - compile ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+all doctests ran in 5.05s; merged doctests compilation took 4.82s

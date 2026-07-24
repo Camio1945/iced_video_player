@@ -1,8 +1,8 @@
 //! Playlist sidebar view.
 
 use crate::app_state::{App, Message};
-use iced::widget::{button, column, scrollable, text, Button, Container};
 use iced::alignment::{Horizontal, Vertical};
+use iced::widget::{Button, Container, button, column, scrollable, text};
 use iced::{Alignment, Length, Renderer, Theme};
 
 impl App {
@@ -17,7 +17,11 @@ impl App {
 
         // Playlist items
         for (i, path) in self.playlist.iter().enumerate() {
-            col = col.push(Self::build_playlist_item(i, path.clone(), self.playlist_index));
+            col = col.push(Self::build_playlist_item(
+                i,
+                path.clone(),
+                self.playlist_index,
+            ));
         }
 
         // Empty state

@@ -69,11 +69,9 @@ fn subscription(app: &App) -> Subscription<Message> {
     // Listen for file drop events (drag-and-drop files/folders onto the window).
     // When files are dropped while the playlist tab is active and empty,
     // they are added to the playlist.
-    let file_drop_sub = window::events().filter_map(|(_id, event)| {
-        match event {
-            window::Event::FileDropped(path) => Some(Message::WindowFileDropped(path)),
-            _ => None,
-        }
+    let file_drop_sub = window::events().filter_map(|(_id, event)| match event {
+        window::Event::FileDropped(path) => Some(Message::WindowFileDropped(path)),
+        _ => None,
     });
 
     // Only run the dictionary-webview tick when a lookup is active or a
@@ -95,7 +93,13 @@ fn subscription(app: &App) -> Subscription<Message> {
         Subscription::none()
     };
 
-    Subscription::batch([keyboard_sub, window_sub, file_drop_sub, tick_sub, position_sub])
+    Subscription::batch([
+        keyboard_sub,
+        window_sub,
+        file_drop_sub,
+        tick_sub,
+        position_sub,
+    ])
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────

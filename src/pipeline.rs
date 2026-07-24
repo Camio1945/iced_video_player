@@ -93,7 +93,10 @@ impl VideoPipeline {
             texture_y,
             texture_uv,
             ..
-        } = self.videos.get(&video_id).unwrap();
+        } = self
+            .videos
+            .get(&video_id)
+            .expect("video entry missing after upload insertion");
 
         pipeline_helpers::write_y_texture(queue, texture_y, frame, stride, width, height);
         pipeline_helpers::write_uv_texture(queue, texture_uv, frame, stride, width, height);

@@ -29,19 +29,35 @@ impl Video {
     pub fn new(uri: &url::Url) -> Result<Self, Error> {
         gst::init()?;
 
-        let pipeline = format!(
-            "playbin uri=\"{}\" text-sink=\"appsink name=iced_text sync=true drop=true\" video-sink=\"videoscale ! videoconvert ! appsink name=iced_video drop=true caps=video/x-raw,format=NV12,pixel-aspect-ratio=1/1\"",
-            uri.as_str()
-        );
-        let pipeline = gst::parse::launch(pipeline.as_ref())?
+        let pipeline_str = Self::build_playbin_pipeline(uri);
+        let pipeline = gst::parse::launch(pipeline_str.as_ref())?
             .downcast::<gst::Pipeline>()
             .map_err(|_| Error::Cast)?;
 
+        let video_sink = Self::extract_video_sink(&pipeline)?;
+        let text_sink: gst::Element = pipeline.property("text-sink");
+        let text_sink = text_sink
+            .downcast::<gst_app::AppSink>()
+            .map_err(|_| Error::Cast)?;
+
+        Self::from_gst_pipeline(pipeline, video_sink, Some(text_sink))
+    }
+
+    fn build_playbin_pipeline(uri: &url::Url) -> String {
+        // Escape special characters in the URI to prevent GStreamer pipeline injection.
+        // The URI comes from a parsed `url::Url`, but quotes or backslashes could
+        // break out of the `uri="..."` context in the pipeline string.
+        let uri_escaped = uri.as_str().replace('\\', "\\\\").replace('"', "\\\"");
+        format!(
+            "playbin uri=\"{}\" text-sink=\"appsink name=iced_text sync=true drop=true\" video-sink=\"videoscale ! videoconvert ! appsink name=iced_video drop=true caps=video/x-raw,format=NV12,pixel-aspect-ratio=1/1\"",
+            uri_escaped
+        )
+    }
+
+    fn extract_video_sink(pipeline: &gst::Pipeline) -> Result<gst_app::AppSink, Error> {
         let video_sink: gst::Element = pipeline.property("video-sink");
         let pad = video_sink.pads().first().cloned().ok_or(Error::Caps)?;
-        let pad = pad
-            .dynamic_cast::<gst::GhostPad>()
-            .map_err(|_| Error::Cast)?;
+        let pad = pad.dynamic_cast::<gst::GhostPad>().map_err(|_| Error::Cast)?;
         let bin = pad
             .parent_element()
             .ok_or(Error::Cast)?
@@ -50,16 +66,7 @@ impl Video {
         let video_sink = bin
             .by_name("iced_video")
             .ok_or(Error::AppSink("iced_video".into()))?;
-        let video_sink = video_sink
-            .downcast::<gst_app::AppSink>()
-            .map_err(|_| Error::Cast)?;
-
-        let text_sink: gst::Element = pipeline.property("text-sink");
-        let text_sink = text_sink
-            .downcast::<gst_app::AppSink>()
-            .map_err(|_| Error::Cast)?;
-
-        Self::from_gst_pipeline(pipeline, video_sink, Some(text_sink))
+        video_sink.downcast::<gst_app::AppSink>().map_err(|_| Error::Cast)
     }
 
     /// Creates a new video based on an existing GStreamer pipeline and appsink.
