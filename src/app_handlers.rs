@@ -139,9 +139,9 @@ impl App {
                     .file_name()
                     .and_then(|n| n.to_str())
                     .unwrap_or(p);
-                format!("{name} - Video Player")
+                format!("{name} - ELP11")
             }
-            None => "Video Player".to_string(),
+            None => "ELP11".to_string(),
         };
 
         crate::dict_webview::tick(is_dict_active, word, &title);

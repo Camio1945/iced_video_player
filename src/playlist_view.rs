@@ -1,9 +1,13 @@
 //! Playlist sidebar view.
 
 use crate::app_state::{App, Message};
+use iced::Color;
 use iced::alignment::{Horizontal, Vertical};
 use iced::widget::{Button, Container, button, column, scrollable, text};
-use iced::{Alignment, Length, Renderer, Theme};
+use iced::{Length, Renderer, Theme};
+
+// Orange theme for Playlist
+const ORANGE_LIGHT: Color = Color::from_rgb(0.988, 0.757, 0.459);
 
 impl App {
     /// Build the playlist tab content.
@@ -50,7 +54,7 @@ impl App {
         .padding([8, 0])
         .width(Length::Fill)
         .on_press(Message::ClearPlaylist)
-        .style(crate::styles::danger_btn)
+        .style(crate::styles::orange_btn)
         .into()
     }
 
@@ -70,7 +74,7 @@ impl App {
             .width(Length::Fill)
             .padding(4)
             .style(if is_current {
-                button::primary
+                crate::styles::orange_btn
             } else {
                 button::secondary
             })
@@ -79,9 +83,20 @@ impl App {
     }
 
     fn build_empty_state() -> iced::Element<'static, Message, Theme, Renderer> {
-        text("Play a video to auto-populate")
-            .size(11)
-            .align_x(Alignment::Center)
-            .into()
+        Container::new(
+            iced::widget::Column::new()
+                .spacing(8)
+                .padding([24, 14])
+                .align_x(Horizontal::Center)
+                .push(text("\u{1F3B5}").size(28).color(ORANGE_LIGHT))
+                .push(
+                    text("Play a video to auto-populate")
+                        .size(12)
+                        .color(ORANGE_LIGHT),
+                ),
+        )
+        .width(Length::Fill)
+        .style(crate::styles::playlist_container)
+        .into()
     }
 }

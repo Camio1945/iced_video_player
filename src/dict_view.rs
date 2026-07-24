@@ -6,12 +6,12 @@ use iced::{
     widget::{Button, Column, Container, Row, Scrollable, Space, Stack, Text},
 };
 
-// Spotify palette accents for content inside the sidebar.
-const GREEN: Color = Color::from_rgb(0.118, 0.843, 0.376); // #1ed760
+// Colorful palette for Dictionary section
 const SILVER: Color = Color::from_rgb(0.702, 0.702, 0.702); // #b3b3b3
 const NEAR_WHITE: Color = Color::from_rgb(0.796, 0.796, 0.796); // #cbcbcb
 const MUTED: Color = Color::from_rgb(0.55, 0.55, 0.58);
 const ERROR_RED: Color = Color::from_rgb(0.953, 0.447, 0.498); // #f3727f
+const PURPLE_LIGHT: Color = Color::from_rgb(0.733, 0.565, 0.925);
 
 pub(crate) fn build_dictionary_sidebar(app: &App) -> Element<'_, Message> {
     let tabs = build_tab_bar(app.active_tab);
@@ -69,7 +69,11 @@ fn build_tab_btn(
         .width(Length::Fill)
         .on_press(Message::SwitchSidebarTab(tab))
         .style(if is_active {
-            crate::styles::active_tab_btn
+            match tab {
+                SidebarTab::Dictionary => crate::styles::active_dict_tab_btn,
+                SidebarTab::Settings => crate::styles::active_settings_tab_btn,
+                SidebarTab::Playlist => crate::styles::active_playlist_tab_btn,
+            }
         } else {
             crate::styles::tab_btn
         });
@@ -79,16 +83,21 @@ fn build_tab_btn(
             .width(Length::Fill)
             .clip(true)
             .push(btn)
-            .push(active_tab_cover())
+            .push(active_tab_cover(tab))
             .into()
     } else {
         btn.into()
     }
 }
 
-/// Overlay a SURFACE-colored strip over the bottom 2px of the button's
-/// border, so only the top, left, and right green sides remain visible.
-fn active_tab_cover() -> Column<'static, Message> {
+/// Overlay a colored strip over the bottom 2px of the button's
+/// border, matching the color scheme for each tab.
+fn active_tab_cover(tab: SidebarTab) -> Column<'static, Message> {
+    let bg_color = match tab {
+        SidebarTab::Dictionary => iced::Color::from_rgb(0.15, 0.12, 0.20),
+        SidebarTab::Settings => iced::Color::from_rgb(0.12, 0.15, 0.20),
+        SidebarTab::Playlist => iced::Color::from_rgb(0.18, 0.13, 0.10),
+    };
     Column::new()
         .width(Length::Fill)
         .height(Length::Fill)
@@ -97,10 +106,8 @@ fn active_tab_cover() -> Column<'static, Message> {
             Container::new(Space::new())
                 .width(Length::Fill)
                 .height(Length::Fixed(2.0))
-                .style(|_| iced::widget::container::Style {
-                    background: Some(iced::Background::Color(iced::Color::from_rgb(
-                        0.094, 0.094, 0.094,
-                    ))),
+                .style(move |_| iced::widget::container::Style {
+                    background: Some(iced::Background::Color(bg_color)),
                     ..Default::default()
                 }),
         )
@@ -137,7 +144,7 @@ fn build_dict_loading_placeholder<'a>() -> Element<'a, Message> {
             .spacing(6)
             .align_x(Horizontal::Center)
             .padding([24, 12])
-            .push(Text::new("\u{23F3}").size(22))
+            .push(Text::new("\u{23F3}").size(22).color(PURPLE_LIGHT))
             .push(Text::new("Looking up...").size(12).color(SILVER)),
     )
     .width(Length::Fill)
@@ -150,11 +157,11 @@ fn build_dict_empty_placeholder<'a>() -> Element<'a, Message> {
             .spacing(8)
             .padding([24, 14])
             .align_x(Horizontal::Center)
-            .push(Text::new("\u{1F448}").size(28).color(SILVER))
+            .push(Text::new("\u{1F448}").size(28).color(PURPLE_LIGHT))
             .push(
                 Text::new("Click a word in the subtitle")
                     .size(13)
-                    .color(NEAR_WHITE),
+                    .color(PURPLE_LIGHT),
             )
             .push(
                 Text::new("The Chinese meaning will appear here.")
@@ -201,23 +208,23 @@ fn build_dict_chinese_section<'a>(chinese: &str) -> Container<'a, Message> {
         Column::new()
             .spacing(2)
             .push(Text::new("\u{4E2D}\u{6587}").size(10).color(MUTED))
-            .push(Text::new(chinese.to_string()).size(20).color(GREEN)),
+            .push(Text::new(chinese.to_string()).size(20).color(PURPLE_LIGHT)),
     )
     .width(Length::Fill)
     .padding([10, 10])
-    .style(crate::styles::dict_section_card)
+    .style(crate::styles::dict_container)
 }
 
 fn build_dict_definitions_sections<'a>(sections: &[DictSection]) -> Column<'a, Message> {
     let mut outer = Column::new().spacing(10);
-    // lighter green tint for part-of-speech labels
-    let pos_green = Color::from_rgb(0.35, 0.80, 0.45);
+    // lighter purple tint for part-of-speech labels
+    let pos_purple = Color::from_rgb(0.70, 0.52, 0.85);
     for section in sections {
         let mut sec_col = Column::new().spacing(3);
         sec_col = sec_col.push(
             Text::new(format!("[{}]", section.part_of_speech))
                 .size(11)
-                .color(pos_green),
+                .color(pos_purple),
         );
         for (i, (def, example)) in section.definitions.iter().enumerate() {
             sec_col = sec_col.push(

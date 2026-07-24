@@ -57,7 +57,9 @@ impl Video {
     fn extract_video_sink(pipeline: &gst::Pipeline) -> Result<gst_app::AppSink, Error> {
         let video_sink: gst::Element = pipeline.property("video-sink");
         let pad = video_sink.pads().first().cloned().ok_or(Error::Caps)?;
-        let pad = pad.dynamic_cast::<gst::GhostPad>().map_err(|_| Error::Cast)?;
+        let pad = pad
+            .dynamic_cast::<gst::GhostPad>()
+            .map_err(|_| Error::Cast)?;
         let bin = pad
             .parent_element()
             .ok_or(Error::Cast)?
@@ -66,7 +68,9 @@ impl Video {
         let video_sink = bin
             .by_name("iced_video")
             .ok_or(Error::AppSink("iced_video".into()))?;
-        video_sink.downcast::<gst_app::AppSink>().map_err(|_| Error::Cast)
+        video_sink
+            .downcast::<gst_app::AppSink>()
+            .map_err(|_| Error::Cast)
     }
 
     /// Creates a new video based on an existing GStreamer pipeline and appsink.

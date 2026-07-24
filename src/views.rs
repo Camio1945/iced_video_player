@@ -15,11 +15,12 @@ use iced::{
 };
 use iced_video_player::{Video, VideoPlayer};
 
-// ── Spotify color helpers ───────────────────────────────────────────────
+// ── Colorful palette helpers ───────────────────────────────────────────
 
-pub(crate) const GREEN: Color = Color::from_rgb(0.118, 0.843, 0.376);
 pub(crate) const SILVER: Color = Color::from_rgb(0.702, 0.702, 0.702);
 pub(crate) const MUTED: Color = Color::from_rgb(0.55, 0.55, 0.58);
+pub(crate) const TEAL: Color = Color::from_rgb(0.255, 0.780, 0.710);
+pub(crate) const PURPLE: Color = Color::from_rgb(0.612, 0.392, 0.867);
 
 // ── view ──────────────────────────────────────────────────────────────────
 
@@ -135,7 +136,7 @@ fn build_toolbar<'a>(has_video: bool, position: f64, duration: f64) -> Element<'
                 Button::new(Text::new("OPEN").size(11))
                     .padding([4, 14])
                     .on_press(Message::OpenFile)
-                    .style(crate::styles::ctrl_btn),
+                    .style(crate::styles::teal_btn),
             )
             .push(
                 Button::new(Text::new("SUBTITLE...").size(11))
@@ -145,13 +146,13 @@ fn build_toolbar<'a>(has_video: bool, position: f64, duration: f64) -> Element<'
                     } else {
                         None
                     })
-                    .style(crate::styles::ctrl_btn),
+                    .style(crate::styles::purple_btn),
             )
             .push(Space::new().width(Length::Fill))
             .push(
                 Text::new(crate::text_utils::format_time(position))
                     .size(14)
-                    .color(GREEN),
+                    .color(TEAL),
             )
             .push(Text::new(" / ").size(12).color(SILVER))
             .push(
@@ -264,7 +265,7 @@ fn build_loading_screen(path: &str) -> Element<'_, Message> {
                 .spacing(16)
                 .align_x(Horizontal::Center)
                 .push(Text::new("\u{23F3}").size(32))
-                .push(Text::new("Loading video...").size(16).color(Color::WHITE))
+                .push(Text::new("Loading video...").size(16).color(TEAL))
                 .push(Text::new(path).size(11).color(MUTED)),
         )
         .center_x(Length::Fill)
@@ -299,14 +300,14 @@ fn build_no_video_content() -> Column<'static, Message> {
         .push(
             Text::new("Click OPEN or press O to load a video")
                 .size(12)
-                .color(SILVER),
+                .color(PURPLE),
         )
         .push(Space::new().height(4))
         .push(
             Button::new(Text::new("OPEN VIDEO FILE").size(12))
                 .on_press(Message::OpenFile)
                 .padding([10, 28])
-                .style(crate::styles::main_btn),
+                .style(crate::styles::teal_btn),
         )
 }
 
@@ -319,8 +320,8 @@ fn build_no_video_icon() -> Container<'static, Message> {
     Container::new(Image::new(icon_handle().clone()).width(Length::Fixed(96.0)))
         .padding(20)
         .style(|_| container::Style {
-            background: Some(iced::Background::Color(Color::from_rgb(0.10, 0.10, 0.10))),
-            border: border::color(Color::from_rgba(0.118, 0.843, 0.376, 0.35))
+            background: Some(iced::Background::Color(Color::from_rgb(0.08, 0.06, 0.12))),
+            border: border::color(Color::from_rgba(0.612, 0.392, 0.867, 0.55))
                 .width(2.0)
                 .rounded(50.0),
             ..Default::default()

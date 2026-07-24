@@ -112,7 +112,7 @@ pub(crate) fn find_window_by_title(title: &str) -> Option<isize> {
         return Some(hwnd);
     }
 
-    // Fallback: search for a window whose title contains "Video Player".
+    // Fallback: search for a window whose title contains "ELP11".
     let mut result: Option<isize> = None;
     unsafe {
         EnumWindows(
@@ -122,7 +122,7 @@ pub(crate) fn find_window_by_title(title: &str) -> Option<isize> {
     }
     if let Some(hwnd) = result {
         super::debug_log(&format!(
-            "found window by fallback title containing 'Video Player' hwnd={}",
+            "found window by fallback title containing 'ELP11' hwnd={}",
             hwnd
         ));
     }
@@ -149,13 +149,13 @@ pub(crate) fn window_title_contains(hwnd: isize, needle: &[u16]) -> bool {
     }
 }
 
-const VIDEO_PLAYER_WIDE: &[u16] = &[
-    0x0056, 0x0069, 0x0064, 0x0065, 0x006f, 0x0020, 0x0050, 0x006c, 0x0061, 0x0079, 0x0065, 0x0072,
+const APP_NAME_WIDE: &[u16] = &[
+    0x0045, 0x004c, 0x0050, 0x0031, 0x0031,
 ];
 
 unsafe extern "system" fn enum_windows_callback(hwnd: isize, lparam: *mut isize) -> i32 {
     let result = unsafe { &mut *(lparam as *mut Option<isize>) };
-    if result.is_none() && window_title_contains(hwnd, VIDEO_PLAYER_WIDE) {
+    if result.is_none() && window_title_contains(hwnd, APP_NAME_WIDE) {
         *result = Some(hwnd);
         return 0;
     }

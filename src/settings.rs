@@ -1,8 +1,8 @@
 //! Persistent application settings stored as JSON on disk.
 //!
 //! On Windows the config file lives at
-//! `%APPDATA%\video-player\settings.json`; on other platforms it lives at
-//! `$HOME/.config/video-player/settings.json`. The directory is created
+//! `%APPDATA%\ELP11\settings.json`; on other platforms it lives at
+//! `$HOME/.config/ELP11/settings.json`. The directory is created
 //! automatically on first save.
 
 use crate::app_state::SidebarTab;
@@ -129,7 +129,7 @@ fn config_dir() -> std::io::Result<PathBuf> {
         p.push(".config");
         p
     };
-    let dir = base.join("video-player");
+    let dir = base.join("ELP11");
     std::fs::create_dir_all(&dir)?;
     Ok(dir)
 }

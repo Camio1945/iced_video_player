@@ -6,12 +6,12 @@ use iced::{
     widget::{Button, Column, Container, Row, Space, Text},
 };
 
-// Spotify palette
+// Colorful palette - Blue for Settings
 const WHITE: Color = Color::WHITE;
 const SILVER: Color = Color::from_rgb(0.702, 0.702, 0.702);
-const NEAR_WHITE: Color = Color::from_rgb(0.796, 0.796, 0.796);
 const MUTED: Color = Color::from_rgb(0.55, 0.55, 0.58);
-const HEADER: Color = Color::from_rgb(0.95, 0.95, 0.98);
+const BLUE_LIGHT: Color = Color::from_rgb(0.588, 0.761, 0.988);
+const HEADER: Color = BLUE_LIGHT;
 
 // ── Settings tab ──────────────────────────────────────────────────────────
 
@@ -45,7 +45,7 @@ fn build_subtitle_font_size_section(settings: &AppSettings) -> Container<'static
         Column::new()
             .width(Length::Fill)
             .spacing(10)
-            .push(Text::new("Subtitle Font Size").size(13).color(NEAR_WHITE))
+            .push(Text::new("Subtitle Font Size").size(13).color(BLUE_LIGHT))
             .push(build_font_size_row(size, can_increase, can_decrease))
             .push(
                 Text::new(format!(
@@ -59,7 +59,7 @@ fn build_subtitle_font_size_section(settings: &AppSettings) -> Container<'static
     )
     .width(Length::Fill)
     .padding([12, 12])
-    .style(crate::styles::dict_section_card)
+    .style(crate::styles::settings_container)
 }
 
 const FONT_SIZE_BTN_HEIGHT: f32 = 36.0;
@@ -109,7 +109,7 @@ fn build_font_size_step_btn(
     )
     .width(Length::Fixed(FONT_SIZE_BTN_WIDTH))
     .height(Length::Fixed(FONT_SIZE_BTN_HEIGHT))
-    .style(crate::styles::ctrl_btn);
+    .style(crate::styles::blue_ctrl_btn);
     if enabled {
         btn = btn.on_press(message);
     }
@@ -137,7 +137,7 @@ fn build_history_section(settings: &AppSettings) -> Container<'static, Message> 
     Container::new(col)
         .width(Length::Fill)
         .padding([12, 12])
-        .style(crate::styles::dict_section_card)
+        .style(crate::styles::settings_container)
 }
 
 fn build_history_header(enabled: bool) -> Row<'static, Message> {
@@ -148,13 +148,13 @@ fn build_history_header(enabled: bool) -> Row<'static, Message> {
     };
     Row::new()
         .align_y(Vertical::Center)
-        .push(Text::new(toggle_text).size(13).color(NEAR_WHITE))
+        .push(Text::new(toggle_text).size(13).color(BLUE_LIGHT))
         .push(Space::new().width(Length::Fill))
         .push(
             Button::new(Text::new(if enabled { "Disable" } else { "Enable" }).size(11))
                 .padding([4, 12])
                 .on_press(Message::ToggleHistory)
-                .style(crate::styles::ctrl_btn),
+                .style(crate::styles::blue_ctrl_btn),
         )
 }
 
@@ -195,7 +195,7 @@ fn build_small_step_btn(
     )
     .width(Length::Fixed(30.0))
     .height(Length::Fixed(28.0))
-    .style(crate::styles::ctrl_btn);
+    .style(crate::styles::blue_ctrl_btn);
     if enabled {
         btn = btn.on_press(message);
     }

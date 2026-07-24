@@ -435,3 +435,79 @@ The following features were implemented after the initial spec:
 2. **Medium Priority**: Add `Video::id()` public method for library API completeness
 3. **Low Priority**: Add convenience method aliases (`seek_f32`, `toggle_pause`, etc.)
 4. **Documentation**: Consider updating spec.md to include playlist feature
+
+---
+
+## Convergence Report (2026-07-24, Session 2)
+
+**Analysis Type**: Gap analysis post-implementation (colorful UI + code quality refactor)
+
+### Changes Analyzed
+
+| File | Change Type | Description |
+|------|-------------|-------------|
+| `src/styles.rs` → `src/styles/` | Refactor | Split 629-line file into 4-module directory (`mod.rs`, `buttons.rs`, `surfaces.rs`, `widgets.rs`) |
+| `src/styles/buttons.rs` | New | 8 colorful control-bar button styles added (rewind/forward/step/loop/mute/fit/fullscreen) |
+| `src/styles/mod.rs` | New | Shared color constants made `pub(crate)` for cross-module reuse |
+| `src/styles/surfaces.rs` | New | Colorful section containers (purple/blue/orange-tinted) |
+| `src/styles/widgets.rs` | New | Slider, pick-list, scrollbar styles extracted |
+| `src/widgets.rs` | Modified | All 10 control bar buttons now use colorful styles instead of gray `ctrl_btn` |
+| `src/views.rs` | Modified | Toolbar buttons colorful (teal OPEN, purple SUBTITLE); loading/no-video screens colorful |
+| `src/dict_view.rs` | Modified | Dictionary tab: purple theme (tab buttons, placeholders, Chinese section) |
+| `src/dict_view_settings.rs` | Modified | Settings tab: blue theme (containers, buttons, headers) |
+| `src/playlist_view.rs` | Modified | Playlist tab: orange theme (buttons, empty state container) |
+| `src/video/construction.rs` | Modified | rustfmt-only (method chain line breaks, no functional change) |
+
+### Constitution Compliance
+
+| Principle | Status | Notes |
+|-----------|--------|-------|
+| I. GPU-First Rendering | ✅ Compliant | No GPU/shader changes |
+| II. GStreamer Backend | ✅ Compliant | No pipeline changes |
+| III. Widget Composability | ✅ Compliant | `VideoPlayer` widget API unchanged; only desktop app styling |
+| IV. Error Resilience | ✅ Compliant | No error handling changes |
+| V. Cross-Platform | ✅ Compliant | No platform-specific code introduced |
+
+### Spec vs Implementation Gap Analysis
+
+**No new functional gaps introduced.** All changes are UI styling (cosmetic) and code quality (module split, dead code removal). No user stories were added, removed, or broken.
+
+**Pre-existing gaps still open (from Session 1):**
+
+| Gap | Spec Ref | Priority | Status |
+|-----|----------|----------|--------|
+| `Video::id()` public method | US-01, US-03 | Medium | Still missing |
+| Convenience aliases (`seek_f32`, `toggle_pause`, etc.) | US-03 | Low | Still missing |
+| US-09 drag-drop on video area | US-09 | Low | Still partial (playlist drag-drop works) |
+| Spec US-13 tab mismatch (spec: 2 tabs, impl: 3) | US-13 | Medium | Spec not updated |
+
+### New Issues Identified
+
+#### Issue C2-1: Color constant duplication (Maintainability)
+
+**Severity**: Low (no functional impact)
+**Location**: `src/views.rs:20-23`, `src/dict_view.rs:10-14`, `src/dict_view_settings.rs:11-14`, `src/playlist_view.rs:10`
+**Analysis**: Color constants (`SILVER`, `MUTED`, `PURPLE_LIGHT`, etc.) are defined locally in 4 view files AND as `pub(crate)` in `src/styles/mod.rs`. If a color value changes, it must be updated in multiple locations. The `styles/mod.rs` constants were made `pub(crate)` specifically to enable reuse, but the view files were not migrated to import them.
+**Recommendation**: Replace local color constants in view files with `use crate::styles::{SILVER, MUTED, ...};` imports.
+
+#### Issue C2-2: Spec US-13 tab count mismatch (Documentation)
+
+**Severity**: Low
+**Analysis**: Spec US-13 states "Tabs: Subtitles and Dictionary" but the implementation has 3 tabs (Dictionary, Settings, Playlist). This was noted in Session 1 but the spec was never updated. The colorful theming now visually distinguishes all 3 tabs, making the discrepancy more apparent.
+**Recommendation**: Update spec.md US-13 to document the Settings and Playlist tabs.
+
+### Code Quality Improvements Applied
+
+| Improvement | Details |
+|-------------|---------|
+| Module split | `styles.rs` (629 lines) → 4 files (max 215 lines each), all under 400-line limit |
+| Dead code removal | 11 unused functions + 10 unused constants removed |
+| Method size compliance | All style functions under 40 lines |
+| Zero warnings | `cargo check` passes with 0 warnings, 0 errors |
+| Colorful UX | Each section has distinct color identity (purple/blue/orange/teal/pink) |
+
+### Recommendations
+
+1. **Low Priority**: Migrate view files to import color constants from `styles/mod.rs` instead of defining locally (Issue C2-1)
+2. **Low Priority**: Update spec.md US-13 to document all 3 sidebar tabs (Issue C2-2)
+3. **Informational**: Previous Session 1 recommendations remain valid (`Video::id()`, convenience aliases)

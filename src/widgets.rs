@@ -26,7 +26,7 @@ pub(crate) fn skip_back_10_btn() -> Button<'static, Message> {
         .padding([0, BTN_HORIZ_PAD])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::SkipBack(10))
-        .style(styles::ctrl_btn)
+        .style(styles::rewind_btn)
 }
 
 pub(crate) fn skip_back_5_btn() -> Button<'static, Message> {
@@ -34,7 +34,7 @@ pub(crate) fn skip_back_5_btn() -> Button<'static, Message> {
         .padding([0, BTN_HORIZ_PAD])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::SkipBack(5))
-        .style(styles::ctrl_btn)
+        .style(styles::rewind_btn)
 }
 
 /// Circular green play/pause button — the hero control.
@@ -54,7 +54,7 @@ pub(crate) fn skip_forward_5_btn() -> Button<'static, Message> {
         .padding([0, BTN_HORIZ_PAD])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::SkipForward(5))
-        .style(styles::ctrl_btn)
+        .style(styles::forward_btn)
 }
 
 pub(crate) fn skip_forward_10_btn() -> Button<'static, Message> {
@@ -62,7 +62,7 @@ pub(crate) fn skip_forward_10_btn() -> Button<'static, Message> {
         .padding([0, BTN_HORIZ_PAD])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::SkipForward(10))
-        .style(styles::ctrl_btn)
+        .style(styles::forward_btn)
 }
 
 pub(crate) fn frame_step_btn() -> Button<'static, Message> {
@@ -70,7 +70,7 @@ pub(crate) fn frame_step_btn() -> Button<'static, Message> {
         .padding([0, BTN_HORIZ_PAD])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::FrameStepForward)
-        .style(styles::ctrl_btn)
+        .style(styles::step_btn)
 }
 
 // ── Utility controls ────────────────────────────────────────────────────
@@ -88,7 +88,7 @@ pub(crate) fn loop_btn<'a>(is_looping: bool) -> Button<'a, Message> {
         .style(if is_looping {
             styles::active_btn
         } else {
-            styles::ctrl_btn
+            styles::loop_btn_style
         })
 }
 
@@ -103,7 +103,11 @@ pub(crate) fn mute_btn<'a>(muted: bool) -> Button<'a, Message> {
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::ToggleMute)
-        .style(styles::ctrl_btn)
+        .style(if muted {
+            styles::muted_btn_style
+        } else {
+            styles::mute_btn_style
+        })
 }
 
 pub(crate) fn content_fit_btn<'a>(cf: iced::ContentFit) -> Button<'a, Message> {
@@ -116,7 +120,7 @@ pub(crate) fn content_fit_btn<'a>(cf: iced::ContentFit) -> Button<'a, Message> {
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::CycleContentFit)
-        .style(styles::ctrl_btn)
+        .style(styles::fit_btn_style)
 }
 
 pub(crate) fn fullscreen_btn<'a>() -> Button<'a, Message> {
@@ -124,5 +128,5 @@ pub(crate) fn fullscreen_btn<'a>() -> Button<'a, Message> {
         .padding([4, 8])
         .height(Length::Fixed(BTN_HEIGHT))
         .on_press(Message::ToggleFullscreen)
-        .style(styles::ctrl_btn)
+        .style(styles::fullscreen_btn_style)
 }

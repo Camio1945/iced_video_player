@@ -111,7 +111,7 @@ fn main() -> iced::Result {
 
     iced::application(boot, update, view)
         .title(|app: &App| {
-            let base = "Video Player";
+            let base = "ELP11";
             match &app.current_file_path {
                 Some(p) => {
                     let name = std::path::Path::new(p)
