@@ -99,4 +99,21 @@ impl crate::app_state::App {
         self.playlist = videos;
         self.playlist_index = index;
     }
+
+    /// Handle a file dropped onto the window.
+    ///
+    /// Only processes the drop if:
+    /// 1. The playlist tab is active
+    /// 2. The playlist is currently empty
+    pub fn handle_window_file_dropped(&mut self, path: std::path::PathBuf) -> Task<Message> {
+        use crate::app_state::SidebarTab;
+
+        // Only handle drops when playlist tab is active and playlist is empty
+        if self.active_tab != SidebarTab::Playlist || !self.playlist.is_empty() {
+            return Task::none();
+        }
+
+        // Reuse the existing drop handler
+        self.handle_playlist_drop_files(vec![path])
+    }
 }

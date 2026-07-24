@@ -1,2 +1,2 @@
    Compiling iced_video_player v0.6.0 (D:\git\third-party\iced_video_player)
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.65s
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.22s

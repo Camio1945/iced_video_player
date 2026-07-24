@@ -70,6 +70,8 @@ pub enum Message {
     PlaylistPrev,
     PlaylistNext,
     PlaylistDropFiles(Vec<std::path::PathBuf>),
+    /// A file was dropped onto the window (from window::Event::FileDropped).
+    WindowFileDropped(std::path::PathBuf),
 }
 
 pub enum VideoState {

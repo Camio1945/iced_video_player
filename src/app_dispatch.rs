@@ -50,6 +50,7 @@ impl App {
             Message::PlaylistPrev => self.handle_playlist_prev(),
             Message::PlaylistNext => self.handle_playlist_next(),
             Message::PlaylistDropFiles(files) => self.handle_playlist_drop_files(files),
+            Message::WindowFileDropped(path) => self.handle_window_file_dropped(path),
             other => self.dispatch_settings(other),
         }
     }
