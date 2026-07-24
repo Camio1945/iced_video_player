@@ -2,7 +2,7 @@ use crate::app_state::{App, Message, SidebarTab};
 use crate::dict::DictSection;
 use iced::{
     Color, Element, Length,
-    alignment::{Horizontal, Vertical},
+    alignment::Horizontal,
     widget::{Button, Column, Container, Row, Scrollable, Space, Stack, Text},
 };
 
@@ -108,50 +108,30 @@ fn active_tab_cover() -> Column<'static, Message> {
 
 // ── Dictionary tab ────────────────────────────────────────────────────────
 
+/// Build the body of the Dictionary tab. When the dictionary webview is alive
+/// it covers this entire area as a native child HWND, so we emit a transparent
+/// placeholder of equal size so the layout engine still reserves the space.
 fn build_dictionary_content(app: &App) -> Element<'_, Message> {
-    let header = build_dict_header(app);
-
-    let body: Element<'_, Message> = if app.dict_loading {
+    let placeholder: Element<'_, Message> = if crate::dict_webview::has_webview() {
+        // Transparent placeholder – the child webview is drawn on top by the OS.
+        Space::new()
+            .width(Length::Fill)
+            .height(Length::Fill)
+            .into()
+    } else if app.dict_loading {
         build_dict_loading_placeholder()
     } else if app.dict_word.is_empty() {
         build_dict_empty_placeholder()
-    } else {
+    } else if !app.dict_chinese.is_empty()
+        || !app.dict_sections.is_empty()
+        || !app.dict_examples.is_empty()
+    {
         build_dictionary_body(app)
-    };
-
-    Column::new()
-        .width(Length::Fill)
-        .height(Length::Fill)
-        .push(header)
-        .push(body)
-        .into()
-}
-
-fn build_dict_header(app: &App) -> Container<'static, Message> {
-    let title_text = if app.dict_word.is_empty() {
-        Text::new("\u{1F4D6}  Dictionary").size(14).color(SILVER)
     } else {
-        Text::new(format!("\u{1F4D6}  {}", app.dict_word))
-            .size(15)
-            .color(GREEN)
+        build_dict_loading_placeholder()
     };
 
-    let mut header_row = Row::new()
-        .align_y(Vertical::Center)
-        .padding([8, 10])
-        .push(title_text)
-        .push(Space::new().width(Length::Fill));
-    if !app.dict_word.is_empty() {
-        header_row = header_row.push(
-            Button::new(Text::new("\u{2715}").size(13))
-                .padding([1, 8])
-                .on_press(Message::CloseDictionary)
-                .style(crate::styles::ctrl_btn),
-        );
-    }
-    Container::new(header_row)
-        .width(Length::Fill)
-        .style(crate::styles::sidebar_header)
+    placeholder.into()
 }
 
 fn build_dict_loading_placeholder<'a>() -> Element<'a, Message> {

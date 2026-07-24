@@ -1,6 +1,8 @@
 // Use "windows" subsystem for release builds (no console window).
 // Keep the console in debug builds so eprintln! messages are visible.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![allow(unsafe_code)]
+#![allow(static_mut_refs)]
 
 mod app_dispatch;
 mod app_handlers;
@@ -12,6 +14,7 @@ mod boot;
 mod dict;
 mod dict_view;
 mod dict_view_settings;
+mod dict_webview;
 mod icons;
 mod settings;
 mod styles;
@@ -33,6 +36,7 @@ use iced::{
     window,
 };
 use iced_video_player::{Video, VideoPlayer};
+use std::time::Duration;
 
 // ── Spotify color helpers ───────────────────────────────────────────────
 
@@ -354,10 +358,21 @@ fn build_no_video_icon() -> Container<'static, Message> {
 
 // ── subscription ──────────────────────────────────────────────────────────
 
-fn subscription(_app: &App) -> Subscription<Message> {
+fn subscription(app: &App) -> Subscription<Message> {
     let keyboard_sub = keyboard::listen().map(Message::KeyboardEvent);
     let window_sub = window::open_events().map(Message::WindowOpened);
-    Subscription::batch([keyboard_sub, window_sub])
+
+    // Only run the dictionary-webview tick when a lookup is active or a
+    // webview still exists. This avoids re-rendering the no-video screen
+    // every tick and fixes the flicker reported when no video is open.
+    let needs_tick = !app.dict_word.is_empty() || crate::dict_webview::has_webview();
+    let tick_sub = if needs_tick {
+        iced::time::every(Duration::from_millis(200)).map(|_| Message::Tick)
+    } else {
+        Subscription::none()
+    };
+
+    Subscription::batch([keyboard_sub, window_sub, tick_sub])
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────

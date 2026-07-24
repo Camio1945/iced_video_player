@@ -39,6 +39,7 @@ impl App {
             Message::WindowOpened(id) => self.handle_window_opened(id),
             Message::KeyboardEvent(e) => self.handle_keyboard_event(e),
             Message::AdjustVolume(d) => self.handle_adjust_volume(d),
+            Message::Tick => self.handle_tick(),
             _ => self.dispatch_settings(message),
         }
     }

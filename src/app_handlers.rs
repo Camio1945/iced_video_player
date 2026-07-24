@@ -76,22 +76,20 @@ impl App {
     }
 
     pub fn handle_search_word(&mut self, word: String) -> Task<Message> {
-        let w = word.clone();
         self.active_tab = SidebarTab::Dictionary;
         self.dict_word = word;
-        self.dict_loading = true;
+        self.dict_loading = false;
         self.dict_chinese.clear();
         self.dict_phonetic.clear();
         self.dict_sections.clear();
         self.dict_examples.clear();
         self.dict_error = None;
-        Task::perform(
-            async move { crate::dict::lookup(&w) },
-            Message::DictionaryResult,
-        )
+        // No API lookup – the webview handles the Youdao query directly.
+        Task::none()
     }
 
     pub fn handle_dictionary_result(&mut self, result: crate::dict::DictResult) -> Task<Message> {
+        // Kept for compatibility; the webview path bypasses this handler.
         self.dict_word = result.word;
         self.dict_chinese = result.chinese;
         self.dict_phonetic = result.phonetic;
@@ -104,6 +102,31 @@ impl App {
 
     pub fn handle_close_dictionary(&mut self) -> Task<Message> {
         self.clear_dictionary();
+        // The webview will be torn down on the next tick.
+        Task::none()
+    }
+
+    /// Periodic tick – drives the dictionary webview state machine.
+    pub fn handle_tick(&mut self) -> Task<Message> {
+        let is_dict_active = self.active_tab == SidebarTab::Dictionary;
+        let word = if self.dict_word.is_empty() {
+            None
+        } else {
+            Some(self.dict_word.as_str())
+        };
+
+        let title = match &self.current_file_path {
+            Some(p) => {
+                let name = std::path::Path::new(p)
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or(p);
+                format!("{name} - Video Player")
+            }
+            None => "Video Player".to_string(),
+        };
+
+        crate::dict_webview::tick(is_dict_active, word, &title);
         Task::none()
     }
 

@@ -20,7 +20,7 @@ name = "video-player"
 path = "src/main.rs"
 
 [dependencies]
-iced = { version = "0.14", features = ["image", "advanced", "wgpu", "svg"] }
+iced = { version = "0.14", features = ["image", "advanced", "wgpu", "svg", "tokio"] }
 iced_wgpu = "0.14"
 gstreamer = "0.23"
 gstreamer-app = "0.23" # appsink
@@ -45,6 +45,9 @@ windows = { version = "0.61", features = [
     "Globalization",
     "Win32_System_WinRT",
 ] }
+# WebView for Youdao dictionary embedded browser
+wry = "0.43"
+raw-window-handle = "0.6"
 
 [build-dependencies]
 winres = "0.1"

@@ -16,6 +16,7 @@ impl Default for SidebarTab {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum Message {
     TogglePause,
@@ -58,6 +59,7 @@ pub enum Message {
     RemoveHistoryItem(String),
     OpenHistoryItem(String),
     AdjustVolume(f64),
+    Tick,
 }
 
 pub enum VideoState {
