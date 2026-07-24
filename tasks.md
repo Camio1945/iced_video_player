@@ -368,3 +368,70 @@
 ## Next Actions
 
 All tasks completed! The project is in sync with its specification.
+
+---
+
+## Convergence Report (2026-07-24)
+
+**Analysis Type**: Gap analysis between implementation and spec.md
+
+### API Gaps Identified
+
+The following `Video` API methods are specified in `spec.md` but not implemented:
+
+| Method | Spec Reference | Priority |
+|--------|----------------|----------|
+| `id() -> u64` | US-01, US-03 | Medium |
+| `seek_f32(fraction: f32)` | US-03 | Low |
+| `close()` | US-01 | Low |
+| `toggle_pause()` | US-03 | Low |
+| `step_one_frame_fwd()` | US-03 | Low |
+| `set_subtitle_track(index: i32)` | US-03 | Low |
+
+**Recommendation**: Add `id()` public method for library completeness. Other methods are convenience aliases and can be deferred.
+
+### Implementation Completeness
+
+| User Story | Status | Notes |
+|------------|--------|-------|
+| US-01 (Play from URI) | ✅ Complete | GStreamer pipeline injection fixed (escape quotes) |
+| US-02 (GPU Rendering) | ✅ Complete | NV12 textures, BT.709 shader |
+| US-03 (Playback Control) | ⚠️ Minor gaps | Missing convenience methods |
+| US-04 (AV Sync) | ✅ Complete | Latency averaging implemented |
+| US-05 (Thumbnails) | ✅ Complete | CPU-side NV12→RGBA conversion |
+| US-06 (Error Handling) | ✅ Complete | Unified Error enum, no panics |
+| US-07 (PGS Subtitles) | ✅ Complete | Pure-Rust decoder |
+| US-08 (Concurrent Videos) | ✅ Complete | BTreeMap per-video resources |
+| US-09 (File Open) | ⚠️ Partial | Drag-drop on video area not implemented |
+| US-10 (Keyboard Shortcuts) | ✅ Complete | All shortcuts working |
+| US-11 (Subtitles) | ✅ Complete | Auto-discovery, manual load, PGS extraction |
+| US-12 (Dictionary) | ✅ Complete | MyMemory + dictionaryapi.dev |
+| US-13 (Sidebar UI) | ✅ Complete | Tabs: Subtitles, Dictionary, Playlist |
+| US-14 (Settings) | ✅ Complete | JSON persistence |
+| US-15 (Fullscreen) | ✅ Complete | F/F11 toggle, Esc exit |
+
+### New Features Not in Spec
+
+The following features were implemented after the initial spec:
+
+| Feature | Files | Notes |
+|---------|-------|-------|
+| Playlist management | `playlist.rs`, `playlist_view.rs`, `app_handlers_playlist.rs` | Add, clear, navigate |
+| Auto-populate playlist | `app_handlers_playlist.rs:auto_populate_playlist()` | Scans video folder |
+| Playlist navigation | Page Up/Page Down keys | Previous/next video |
+| File drag-drop on playlist | `main.rs:file_drop_sub`, `app_handlers_playlist.rs:handle_window_file_dropped()` | Windows CREATE_NO_WINDOW flag added |
+| Subtitle extraction | `subtitle_extract.rs` | ffmpeg integration with hidden console |
+
+### Code Quality Fixes (2026-07-24)
+
+- GStreamer pipeline injection vulnerability fixed (URI escaping)
+- `unwrap()` replaced with `expect()` in pipeline.rs
+- Method size limit enforced (construction.rs refactored)
+- CREATE_NO_WINDOW flag for ffmpeg on Windows (no console popup)
+
+### Recommendations
+
+1. **High Priority**: None - core functionality complete
+2. **Medium Priority**: Add `Video::id()` public method for library API completeness
+3. **Low Priority**: Add convenience method aliases (`seek_f32`, `toggle_pause`, etc.)
+4. **Documentation**: Consider updating spec.md to include playlist feature
