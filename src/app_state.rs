@@ -2,6 +2,8 @@ use iced_video_player::Video;
 
 use crate::dict::{DictResult, DictSection};
 use crate::settings::AppSettings;
+use crate::subtitle_parse::SubtitleCue;
+use std::time::Instant;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum SidebarTab {
@@ -97,6 +99,11 @@ pub struct App {
     /// Deferred resume position (seconds) applied on the first rendered frame
     /// after a video is opened. Cleared once consumed.
     pub pending_resume: Option<f64>,
+    /// Parsed subtitle cues (sorted by start time) for Home/End navigation.
+    pub subtitle_cues: Vec<SubtitleCue>,
+    /// Wall-clock time of the last Home-key subtitle seek, used to detect a
+    /// rapid double-press (step back one extra subtitle).
+    pub last_home_seek: Option<Instant>,
 }
 
 impl Default for App {
@@ -127,6 +134,8 @@ impl Default for App {
             active_tab: settings.active_tab,
             settings,
             pending_resume: None,
+            subtitle_cues: Vec::new(),
+            last_home_seek: None,
         }
     }
 }

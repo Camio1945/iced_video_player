@@ -254,6 +254,8 @@ impl App {
             self.clear_dictionary();
             self.pending_subtitle = None;
             self.pending_resume = None;
+            self.subtitle_cues.clear();
+            self.last_home_seek = None;
             let url = crate::app_handlers_subtitle::file_url_from_path(&path);
             Task::perform(
                 async move {

@@ -20,6 +20,7 @@ mod settings;
 mod styles;
 mod subtitle_discovery;
 mod subtitle_extract;
+mod subtitle_parse;
 mod subtitle_view;
 mod text_utils;
 mod views;

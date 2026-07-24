@@ -14,6 +14,8 @@ impl App {
                     self.handle_arrow_key(false, modifiers.control())
                 }
                 Key::Named(key::Named::Enter) => self.handle_toggle_fullscreen(),
+                Key::Named(key::Named::Home) => self.handle_subtitle_home(),
+                Key::Named(key::Named::End) => self.handle_subtitle_end(),
                 Key::Character(c) => self.handle_character_key(c.as_str()),
                 Key::Named(key::Named::Escape) => {
                     if self.fullscreen {
