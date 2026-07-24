@@ -11,9 +11,7 @@ authors = ["jazzfool"]
 edition = "2024"
 resolver = "2"
 license = "MIT OR Apache-2.0"
-exclude = [
-    ".media/test.mp4"
-]
+exclude = []
 
 [[bin]]
 name = "ELP11"
