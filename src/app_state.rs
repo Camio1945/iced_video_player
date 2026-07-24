@@ -64,6 +64,12 @@ pub enum Message {
     Tick,
     /// Periodic auto-save of the current playback position (crash resilience).
     SavePosition,
+    // Playlist messages
+    ClearPlaylist,
+    PlayPlaylistItem(usize),
+    PlaylistPrev,
+    PlaylistNext,
+    PlaylistDropFiles(Vec<std::path::PathBuf>),
 }
 
 pub enum VideoState {
@@ -104,6 +110,10 @@ pub struct App {
     /// Wall-clock time of the last Home-key subtitle seek, used to detect a
     /// rapid double-press (step back one extra subtitle).
     pub last_home_seek: Option<Instant>,
+    /// Playlist: list of video file paths.
+    pub playlist: Vec<String>,
+    /// Index of the currently playing video in the playlist, if any.
+    pub playlist_index: Option<usize>,
 }
 
 impl Default for App {
@@ -136,6 +146,8 @@ impl Default for App {
             pending_resume: None,
             subtitle_cues: Vec::new(),
             last_home_seek: None,
+            playlist: Vec::new(),
+            playlist_index: None,
         }
     }
 }

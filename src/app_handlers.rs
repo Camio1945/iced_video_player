@@ -284,6 +284,8 @@ impl App {
                         crate::settings::save(&self.settings);
                         // Schedule a resume-seek for the first rendered frame.
                         self.pending_resume = self.resume_position_for(ps);
+                        // Auto-populate playlist if empty
+                        self.auto_populate_playlist(ps);
                         return self.apply_subtitle_auto(ps);
                     }
                     Err(e) => {

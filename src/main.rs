@@ -6,6 +6,7 @@
 
 mod app_dispatch;
 mod app_handlers;
+mod app_handlers_playlist;
 mod app_handlers_settings;
 mod app_handlers_subtitle;
 mod app_keyboard;
@@ -16,6 +17,8 @@ mod dict_view;
 mod dict_view_settings;
 mod dict_webview;
 mod icons;
+mod playlist;
+mod playlist_view;
 mod settings;
 mod styles;
 mod subtitle_discovery;

@@ -19,7 +19,7 @@ pub(crate) fn build_dictionary_sidebar(app: &App) -> Element<'_, Message> {
     let body: Element<'_, Message> = match app.active_tab {
         SidebarTab::Dictionary => build_dictionary_content(app),
         SidebarTab::Settings => crate::dict_view_settings::build_settings_content(app),
-        SidebarTab::Playlist => build_playlist_content(),
+        SidebarTab::Playlist => build_playlist_content(app),
     };
 
     let body_container = Container::new(
@@ -259,16 +259,6 @@ fn build_dict_examples_section<'a>(examples: &[String]) -> Column<'a, Message> {
 
 // ── Playlist tab ──────────────────────────────────────────────────────────
 
-fn build_playlist_content<'a>() -> Element<'a, Message> {
-    Container::new(
-        Column::new()
-            .spacing(8)
-            .padding([24, 14])
-            .align_x(Horizontal::Center)
-            .push(Text::new("\u{1F3B5}").size(28).color(SILVER))
-            .push(Text::new("Playlist").size(14).color(NEAR_WHITE))
-            .push(Text::new("Coming soon...").size(11).color(MUTED)),
-    )
-    .width(Length::Fill)
-    .into()
+fn build_playlist_content(app: &App) -> Element<'_, Message> {
+    app.build_playlist_content()
 }

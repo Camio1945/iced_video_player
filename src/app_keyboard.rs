@@ -16,6 +16,8 @@ impl App {
                 Key::Named(key::Named::Enter) => self.handle_toggle_fullscreen(),
                 Key::Named(key::Named::Home) => self.handle_subtitle_home(),
                 Key::Named(key::Named::End) => self.handle_subtitle_end(),
+                Key::Named(key::Named::PageUp) => self.handle_playlist_prev(),
+                Key::Named(key::Named::PageDown) => self.handle_playlist_next(),
                 Key::Character(c) => self.handle_character_key(c.as_str()),
                 Key::Named(key::Named::Escape) => {
                     if self.fullscreen {

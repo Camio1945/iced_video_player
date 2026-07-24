@@ -7,6 +7,24 @@
 
 use std::path::{Path, PathBuf};
 
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+/// `CREATE_NO_WINDOW` creation flag — prevents a console window from flashing
+/// on screen when a GUI application (built with `windows_subsystem = "windows"`)
+/// spawns a console subprocess such as ffmpeg.exe.
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// Build a `Command` for `program` with `CREATE_NO_WINDOW` on Windows so GUI
+/// builds don't flash a console when invoking ffmpeg.
+fn spawn_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let mut cmd = std::process::Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
 /// Extract subtitle stream `sub_index` (ffmpeg `0:s:N`) from `video_path`
 /// into `<video_stem>.en.srt` next to the video.  Returns the SRT path.
 /// If the SRT already exists (e.g. from a previous run), it is reused.
@@ -128,7 +146,7 @@ fn srt_timestamp(t: f64) -> String {
 
 fn find_ffmpeg() -> Result<PathBuf, String> {
     for candidate in ["ffmpeg", "ffmpeg.exe"] {
-        if std::process::Command::new(candidate)
+        if spawn_command(candidate)
             .arg("-version")
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
@@ -142,7 +160,7 @@ fn find_ffmpeg() -> Result<PathBuf, String> {
 }
 
 fn run_ffmpeg(ffmpeg: &Path, args: &[&str], output: &Path) -> Result<(), String> {
-    let out = std::process::Command::new(ffmpeg)
+    let out = spawn_command(ffmpeg)
         .args(args)
         .arg(output)
         .output()

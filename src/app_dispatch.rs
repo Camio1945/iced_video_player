@@ -38,7 +38,19 @@ impl App {
             Message::AdjustVolume(d) => self.handle_adjust_volume(d),
             Message::Tick => self.handle_tick(),
             Message::SavePosition => self.handle_save_position(),
-            _ => self.dispatch_settings(message),
+            _ => self.dispatch_secondary(message),
+        }
+    }
+
+    /// Secondary dispatcher for playlist and settings messages.
+    fn dispatch_secondary(&mut self, message: Message) -> Task<Message> {
+        match message {
+            Message::ClearPlaylist => self.handle_clear_playlist(),
+            Message::PlayPlaylistItem(i) => self.handle_play_playlist_item(i),
+            Message::PlaylistPrev => self.handle_playlist_prev(),
+            Message::PlaylistNext => self.handle_playlist_next(),
+            Message::PlaylistDropFiles(files) => self.handle_playlist_drop_files(files),
+            other => self.dispatch_settings(other),
         }
     }
 
