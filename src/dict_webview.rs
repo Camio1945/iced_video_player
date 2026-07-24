@@ -38,6 +38,9 @@ static mut POPUP_HWND: isize = 0;
 static PAGE_LOADED: AtomicBool = AtomicBool::new(false);
 static mut CURRENT_WORD: String = String::new();
 static mut LAST_BOUNDS_LOG: Option<(i32, i32, i32, i32)> = None;
+/// Track whether the webview was created for a word search.
+/// This allows us to hide/show when switching tabs without destroying the webview.
+static mut DICT_SEARCH_ACTIVE: bool = false;
 
 // ── Constants ────────────────────────────────────────────────────────────
 
@@ -418,26 +421,6 @@ use wry::WebViewBuilderExtWindows;
 fn tick_impl(is_dict_active: bool, dict_word: Option<&str>, window_title: &str) {
     let word = dict_word.unwrap_or("");
 
-    // Decide whether the webview should exist.
-    let should_exist = is_dict_active && !word.is_empty();
-
-    unsafe {
-        if !should_exist {
-            // Dictionary not active or no word – tear everything down.
-            if WEBVIEW.is_some() {
-                WEBVIEW = None;
-                CURRENT_WORD.clear();
-                PAGE_LOADED.store(false, Ordering::SeqCst);
-            }
-            if POPUP_HWND != 0 {
-                destroy_popup(POPUP_HWND);
-                POPUP_HWND = 0;
-                debug_log("popup destroyed (dict inactive or empty)");
-            }
-            return;
-        }
-    }
-
     // --- Find the Iced window (owner) if needed. ---
     unsafe {
         if PARENT_HWND == 0 {
@@ -456,10 +439,28 @@ fn tick_impl(is_dict_active: bool, dict_word: Option<&str>, window_title: &str) 
     }
 
     // --- Word changed? Tear down so we can recreate with the new word. ---
+    // Only destroy if there was an active search and the word is different/cleared.
     unsafe {
         let word_changed = CURRENT_WORD != word;
         if word_changed {
+            // If the new word is empty, clear everything and hide.
+            if word.is_empty() {
+                if WEBVIEW.is_some() {
+                    WEBVIEW = None;
+                    PAGE_LOADED.store(false, Ordering::SeqCst);
+                }
+                if POPUP_HWND != 0 {
+                    destroy_popup(POPUP_HWND);
+                    POPUP_HWND = 0;
+                    debug_log("popup destroyed (word cleared)");
+                }
+                CURRENT_WORD.clear();
+                DICT_SEARCH_ACTIVE = false;
+                return;
+            }
+            // Word changed to a new non-empty word: rebuild webview.
             CURRENT_WORD = word.to_string();
+            DICT_SEARCH_ACTIVE = true;
             if WEBVIEW.is_some() {
                 WEBVIEW = None;
                 PAGE_LOADED.store(false, Ordering::SeqCst);
@@ -467,6 +468,110 @@ fn tick_impl(is_dict_active: bool, dict_word: Option<&str>, window_title: &str) 
             if POPUP_HWND != 0 {
                 destroy_popup(POPUP_HWND);
                 POPUP_HWND = 0;
+            }
+        }
+    }
+
+    // --- If no word, nothing to show. ---
+    if word.is_empty() {
+        unsafe {
+            if POPUP_HWND != 0 {
+                // Hide the popup off-screen instead of destroying.
+                let _ = SetWindowPos(
+                    POPUP_HWND,
+                    HWND_TOP,
+                    -32000,
+                    -32000,
+                    0,
+                    0,
+                    SWP_SHOWWINDOW | SWP_FRAMECHANGED,
+                );
+            }
+        }
+        return;
+    }
+
+    // --- Mark that we have an active dictionary search. ---
+    unsafe {
+        DICT_SEARCH_ACTIVE = true;
+    }
+
+    // --- Compute desired popup rect (screen coords, physical pixels). ---
+    let (popup_x, popup_y, popup_w, popup_h) =
+        unsafe { compute_popup_rect(PARENT_HWND) };
+    if popup_w <= 0 || popup_h <= 0 {
+        return;
+    }
+
+    // --- Determine if popup should be visible. ---
+    // Hide off-screen when dictionary tab is not active, but keep webview alive.
+    let should_show = is_dict_active;
+
+    // --- Create the popup + webview if needed. ---
+    let popup = unsafe { POPUP_HWND };
+    if popup == 0 {
+        // No popup exists yet, create it.
+        let new_popup = create_popup(unsafe { PARENT_HWND }, popup_x, popup_y, popup_w, popup_h);
+        if new_popup == 0 {
+            debug_log("create_popup failed");
+            return;
+        }
+        unsafe {
+            POPUP_HWND = new_popup;
+        }
+        debug_log(&format!(
+            "popup created hwnd={new_popup} at ({popup_x},{popup_y}) {popup_w}x{popup_h}"
+        ));
+
+        let url = url_encode_word(word);
+        let url = format!("https://dict.youdao.com/m/result?word={url}&lang=en");
+        debug_log(&format!("creating webview url='{url}'"));
+
+        let wrapper = HwndWrap(new_popup);
+        let initial_rect = wry::Rect {
+            position: wry::dpi::Position::Physical(wry::dpi::PhysicalPosition::new(0, 0)),
+            size: wry::dpi::Size::Physical(wry::dpi::PhysicalSize::new(popup_w as u32, popup_h as u32)),
+        };
+        let builder = wry::WebViewBuilder::new_as_child(&wrapper)
+            .with_url(&url)
+            .with_user_agent(MOBILE_UA)
+            .with_theme(wry::Theme::Dark)
+            .with_bounds(initial_rect)
+            .with_initialization_script(DARKREADER_JS)
+            .with_on_page_load_handler(|event, _url| {
+                if let wry::PageLoadEvent::Finished = event {
+                    debug_log("page load finished");
+                    PAGE_LOADED.store(true, Ordering::SeqCst);
+                }
+            });
+
+        match builder.build() {
+            Ok(wv) => {
+                debug_log("webview created successfully inside popup");
+                unsafe { WEBVIEW = Some(wv); }
+            }
+            Err(e) => {
+                debug_log(&format!("failed to create webview: {e}"));
+                eprintln!("dict_webview: failed to create webview: {e}");
+                // Bail and leave the popup around; next tick will retry the webview.
+            }
+        }
+        return;
+    }
+
+    // --- Popup exists: position it (on-screen if active, off-screen if inactive). ---
+    unsafe {
+        let (target_x, target_y) = if should_show {
+            (popup_x, popup_y)
+        } else {
+            // Move off-screen to hide without destroying the webview.
+            (-32000, -32000)
+        };
+        move_popup(popup, target_x, target_y, popup_w, popup_h);
+        if let Some(ref wv) = WEBVIEW {
+            // When the page finishes loading, inject dark styling via DOM.
+            if PAGE_LOADED.swap(false, Ordering::SeqCst) {
+                let _ = wv.evaluate_script(DARK_OVERRIDE_JS);
             }
         }
     }
