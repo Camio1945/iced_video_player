@@ -60,6 +60,8 @@ pub enum Message {
     OpenHistoryItem(String),
     AdjustVolume(f64),
     Tick,
+    /// Periodic auto-save of the current playback position (crash resilience).
+    SavePosition,
 }
 
 pub enum VideoState {
@@ -92,6 +94,9 @@ pub struct App {
     pub pending_subtitle: Option<std::path::PathBuf>,
     pub active_tab: SidebarTab,
     pub settings: AppSettings,
+    /// Deferred resume position (seconds) applied on the first rendered frame
+    /// after a video is opened. Cleared once consumed.
+    pub pending_resume: Option<f64>,
 }
 
 impl Default for App {
@@ -121,7 +126,18 @@ impl Default for App {
             pending_subtitle: None,
             active_tab: settings.active_tab,
             settings,
+            pending_resume: None,
         }
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        // Best-effort: persist the exact final playback position so the next
+        // session resumes from here. This complements the periodic auto-save
+        // that covers hard crashes (where `Drop` does not run). Errors are
+        // swallowed inside `persist_current_position`.
+        self.persist_current_position();
     }
 }
 
@@ -161,5 +177,40 @@ impl App {
         self.dict_examples.clear();
         self.dict_loading = false;
         self.dict_error = None;
+    }
+
+    /// Save the current video's playback position to settings (best-effort).
+    /// Used by the periodic auto-save and on application close. The disk write
+    /// is skipped when the position hasn't moved meaningfully since the last
+    /// save (e.g. while paused), but the in-memory value is always kept fresh
+    /// enough by the periodic timer to satisfy the "within 10 seconds" crash
+    /// tolerance.
+    pub fn persist_current_position(&mut self) {
+        if !self.settings.history_enabled {
+            return;
+        }
+        let Some(path) = self.current_file_path.clone() else {
+            return;
+        };
+        let pos = match &self.video {
+            VideoState::Ready(v) => v.position().as_secs_f64(),
+            _ => return,
+        };
+        if pos <= 0.0 {
+            return;
+        }
+        // Skip the disk write if the position is essentially unchanged since
+        // the last save (e.g. the video is paused). The stored value is
+        // already current in that case.
+        let unchanged = self
+            .settings
+            .playback_positions
+            .get(&path)
+            .is_some_and(|s| (s - pos).abs() <= 0.5);
+        if unchanged {
+            return;
+        }
+        self.settings.set_resume_position(&path, pos);
+        crate::settings::save(&self.settings);
     }
 }

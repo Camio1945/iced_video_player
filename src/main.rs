@@ -25,7 +25,7 @@ mod text_utils;
 mod views;
 mod widgets;
 
-use app_state::{App, Message};
+use app_state::{App, Message, VideoState};
 use iced::{self, Subscription, Task, Theme, keyboard, window};
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -72,7 +72,16 @@ fn subscription(app: &App) -> Subscription<Message> {
         Subscription::none()
     };
 
-    Subscription::batch([keyboard_sub, window_sub, tick_sub])
+    // Periodically persist the current playback position so a crash never
+    // loses more than a few seconds of progress. Only active while a video is
+    // actually loaded.
+    let position_sub = if matches!(app.video, VideoState::Ready(_)) {
+        iced::time::every(Duration::from_secs(5)).map(|_| Message::SavePosition)
+    } else {
+        Subscription::none()
+    };
+
+    Subscription::batch([keyboard_sub, window_sub, tick_sub, position_sub])
 }
 
 // ── Entry point ───────────────────────────────────────────────────────────

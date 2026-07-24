@@ -7,6 +7,7 @@
 
 use crate::app_state::SidebarTab;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -25,6 +26,11 @@ pub struct AppSettings {
     /// Which sidebar tab was active when the app was last closed.
     #[serde(default)]
     pub active_tab: SidebarTab,
+    /// Last-known playback position (in seconds) for recently opened files,
+    /// keyed by absolute file path. Used to resume playback where the user
+    /// left off.
+    #[serde(default)]
+    pub playback_positions: HashMap<String, f64>,
 }
 
 fn default_history_enabled() -> bool {
@@ -42,6 +48,7 @@ impl Default for AppSettings {
             max_history_items: 100,
             recent_files: Vec::new(),
             active_tab: SidebarTab::default(),
+            playback_positions: HashMap::new(),
         }
     }
 }
@@ -69,12 +76,14 @@ impl AppSettings {
         self.max_history_items =
             (self.max_history_items + Self::HISTORY_STEP).min(Self::MAX_HISTORY_ITEMS);
         self.recent_files.truncate(self.max_history_items);
+        self.prune_resume_positions();
     }
 
     pub fn decrease_max_history(&mut self) {
         self.max_history_items = (self.max_history_items.saturating_sub(Self::HISTORY_STEP))
             .max(Self::MIN_HISTORY_ITEMS);
         self.recent_files.truncate(self.max_history_items);
+        self.prune_resume_positions();
     }
 
     /// Record a successfully opened file. The path is moved to the front;
@@ -87,6 +96,24 @@ impl AppSettings {
         self.recent_files.retain(|f| f != path);
         self.recent_files.insert(0, path.to_string());
         self.recent_files.truncate(self.max_history_items);
+    }
+
+    /// Record the last-known playback position (in seconds) for `path`.
+    /// Entries for files no longer in the recent list are pruned so the map
+    /// stays bounded by `max_history_items`.
+    pub fn set_resume_position(&mut self, path: &str, position: f64) {
+        if path.is_empty() {
+            return;
+        }
+        self.playback_positions.insert(path.to_string(), position);
+        self.prune_resume_positions();
+    }
+
+    /// Drop resume positions for files that are no longer tracked in the
+    /// recent-files list.
+    pub fn prune_resume_positions(&mut self) {
+        self.playback_positions
+            .retain(|k, _| self.recent_files.iter().any(|f| f == k));
     }
 }
 
@@ -123,12 +150,33 @@ pub fn load() -> AppSettings {
 
 /// Persist settings to disk. Errors are intentionally swallowed because
 /// settings are convenience state — a failed write should not crash the app.
+///
+/// The write is performed atomically (write to a temp file in the same
+/// directory, then rename over the target) so that a crash or power loss
+/// mid-write leaves the previous good file intact rather than a truncated or
+/// partially-written one. This is important because the file is written
+/// periodically (every few seconds) to track playback positions.
 pub fn save(settings: &AppSettings) {
-    if let Ok(path) = config_path()
-        && let Ok(json) = serde_json::to_string_pretty(settings)
-    {
-        if let Err(e) = std::fs::write(&path, json) {
-            log::warn!("failed to save settings to {}: {e}", path.display());
+    let Ok(path) = config_path() else {
+        return;
+    };
+    let Ok(json) = serde_json::to_string_pretty(settings) else {
+        return;
+    };
+
+    // Atomic write: temp file + rename (same directory so the rename is
+    // atomic on both POSIX and Windows NTFS).
+    if let Some(dir) = path.parent() {
+        let tmp = dir.join("settings.json.tmp");
+        if std::fs::write(&tmp, &json).is_ok() && std::fs::rename(&tmp, &path).is_ok() {
+            return;
         }
+        // Remove a leftover temp file from a failed rename (best-effort).
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    // Fallback: direct write (less crash-safe but better than nothing).
+    if let Err(e) = std::fs::write(&path, &json) {
+        log::warn!("failed to save settings to {}: {e}", path.display());
     }
 }

@@ -15,10 +15,7 @@ impl App {
             Message::FrameStepBackward => self.handle_frame_step_backward(),
             Message::EndOfStream => Task::none(),
             Message::NewFrame => self.handle_new_frame(),
-            Message::PlaybackError(err) => {
-                eprintln!("Playback error: {}", err);
-                Task::none()
-            }
+            Message::PlaybackError(err) => self.handle_playback_error(err),
             Message::OpenFile => self.handle_open_file(),
             Message::FilePicked(p) => self.handle_file_picked(p),
             Message::FileOpened(r) => self.handle_file_opened(r),
@@ -40,6 +37,7 @@ impl App {
             Message::KeyboardEvent(e) => self.handle_keyboard_event(e),
             Message::AdjustVolume(d) => self.handle_adjust_volume(d),
             Message::Tick => self.handle_tick(),
+            Message::SavePosition => self.handle_save_position(),
             _ => self.dispatch_settings(message),
         }
     }

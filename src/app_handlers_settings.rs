@@ -41,12 +41,14 @@ impl App {
 
     pub fn handle_clear_history(&mut self) -> Task<Message> {
         self.settings.recent_files.clear();
+        self.settings.playback_positions.clear();
         crate::settings::save(&self.settings);
         Task::none()
     }
 
     pub fn handle_remove_history_item(&mut self, path: String) -> Task<Message> {
         self.settings.recent_files.retain(|f| f != &path);
+        self.settings.playback_positions.remove(&path);
         crate::settings::save(&self.settings);
         Task::none()
     }

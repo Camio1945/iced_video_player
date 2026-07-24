@@ -69,9 +69,26 @@ impl App {
     }
 
     pub fn handle_new_frame(&mut self) -> Task<Message> {
+        // Apply a deferred resume-seek on the first rendered frame, after the
+        // pipeline has finished prerolling. Doing it here (rather than right
+        // after `Video::new`) avoids a race with synchronous subtitle loading,
+        // which queries and resets the pipeline position.
+        if let Some(pos) = self.pending_resume.take() {
+            if let VideoState::Ready(ref mut v) = self.video {
+                let _ = v.seek(Duration::from_secs_f64(pos), true);
+                self.position = pos;
+            }
+            return Task::none();
+        }
         if !self.dragging {
             self.position = self.current_pos();
         }
+        Task::none()
+    }
+
+    /// Log a playback error reported by the video pipeline.
+    pub fn handle_playback_error(&mut self, err: String) -> Task<Message> {
+        eprintln!("Playback error: {}", err);
         Task::none()
     }
 
@@ -224,6 +241,10 @@ impl App {
     }
 
     pub fn handle_file_picked(&mut self, path: Option<std::path::PathBuf>) -> Task<Message> {
+        // Persist the outgoing video's position before it is replaced, so
+        // switching files (without closing the app) still records progress.
+        self.persist_current_position();
+
         if let Some(path) = path {
             let ps = path.display().to_string();
             self.video = VideoState::Loading(ps.clone());
@@ -232,6 +253,7 @@ impl App {
             self.subtitle_image = None;
             self.clear_dictionary();
             self.pending_subtitle = None;
+            self.pending_resume = None;
             let url = crate::app_handlers_subtitle::file_url_from_path(&path);
             Task::perform(
                 async move {
@@ -258,6 +280,8 @@ impl App {
                         self.position = 0.0;
                         self.settings.add_recent_file(ps);
                         crate::settings::save(&self.settings);
+                        // Schedule a resume-seek for the first rendered frame.
+                        self.pending_resume = self.resume_position_for(ps);
                         return self.apply_subtitle_auto(ps);
                     }
                     Err(e) => {
@@ -271,6 +295,34 @@ impl App {
                 eprintln!("Error: {}", e);
             }
         }
+        Task::none()
+    }
+
+    /// Determine the position (in seconds) to resume from for `path`, if any.
+    /// Returns `None` when history is disabled, no position is recorded, the
+    /// recording is too early to bother, or it lies within the last 10 seconds
+    /// of the video (so a fully-watched file starts fresh instead of
+    /// immediately hitting end-of-stream).
+    fn resume_position_for(&self, path: &str) -> Option<f64> {
+        if !self.settings.history_enabled {
+            return None;
+        }
+        let saved = self.settings.playback_positions.get(path).copied()?;
+        if saved <= 1.0 {
+            return None;
+        }
+        let duration = self.video_duration();
+        if duration > 0.0 && saved >= duration - 10.0 {
+            return None;
+        }
+        Some(saved)
+    }
+
+    /// Periodic auto-save of the current playback position. Driven by a
+    /// subscription that fires every few seconds while a video is loaded, so
+    /// that a hard crash never loses more than a few seconds of progress.
+    pub fn handle_save_position(&mut self) -> Task<Message> {
+        self.persist_current_position();
         Task::none()
     }
 }
