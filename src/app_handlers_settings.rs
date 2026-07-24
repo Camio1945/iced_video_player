@@ -23,6 +23,11 @@ impl App {
 
     pub fn handle_toggle_history(&mut self) -> Task<Message> {
         self.settings.history_enabled = !self.settings.history_enabled;
+        // Clear playback positions when history is disabled so stale data
+        // doesn't persist if the user toggles it back on later.
+        if !self.settings.history_enabled {
+            self.settings.playback_positions.clear();
+        }
         crate::settings::save(&self.settings);
         Task::none()
     }

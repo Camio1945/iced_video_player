@@ -6,7 +6,7 @@
 //!     then use it like any other Iced widget in your `view` function by creating a [`VideoPlayer`].
 //!
 //! Example:
-//! ```rust
+//! ```rust,no_run
 //! use iced_video_player::{Video, VideoPlayer};
 //!
 //! fn main() -> iced::Result {

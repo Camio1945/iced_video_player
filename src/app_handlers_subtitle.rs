@@ -150,6 +150,9 @@ impl App {
 
     pub fn handle_subtitle_picked(&mut self, path: Option<std::path::PathBuf>) -> Task<Message> {
         if let Some(path) = path {
+            // Parse timings so Home/End can jump between subtitles.
+            self.subtitle_cues = crate::subtitle_parse::parse_subtitle_file(&path);
+            self.last_home_seek = None;
             let url = file_url_from_path(&path);
             if let Some(Err(e)) = self.with_video_mut(|v| v.set_subtitle_url(&url)) {
                 eprintln!("Failed to load subtitle: {}", e);
